@@ -521,25 +521,86 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
 
   // Wait for and click the Ignore button in confirmation dialog
   async function confirmIgnore() {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await delay(300);
+    for (let attempt = 0; attempt < 15; attempt++) {
+      await delay(200);
       
-      // Look for Ignore button in confirmation dialog
-      const btns = Array.from(document.querySelectorAll('button')).filter(b => b.offsetParent);
+      // Look for Ignore button - class "tXFz7" with text "Ignore"
+      const btns = Array.from(document.querySelectorAll('button.tXFz7')).filter(b => b.offsetParent);
       
       for (const btn of btns) {
-        const txt = btn.textContent.trim();
-        const cls = btn.className || '';
-        // The ignore confirmation button has class "tXFz7"
-        if (txt === 'Ignore' && cls.includes('tXFz7')) {
-          console.log('  Found Ignore confirmation button, clicking...');
+        const txt = btn.textContent.trim().toLowerCase();
+        if (txt === 'ignore') {
+          console.log('  ✓ Found Ignore button, clicking...');
           await click(btn);
           return true;
         }
       }
     }
-    console.log('  No Ignore confirmation found');
+    console.log('  ✗ No Ignore button found after waiting');
     return false;
+  }
+  
+  // Find the X/close button in a friend entry (SVG inside DIV.sGsBQ)
+  function findXButton(container) {
+    // The X button is an SVG path inside DIV.sGsBQ
+    // It's in the same container as the Accept button but is the close/decline icon
+    
+    // Method 1: Look for SVG inside sGsBQ that's NOT the accept button
+    const sGsBQ = container.querySelector('div.sGsBQ');
+    if (sGsBQ) {
+      // Find all clickable SVG elements
+      const svgs = sGsBQ.querySelectorAll('svg');
+      for (const svg of svgs) {
+        const parent = svg.parentElement;
+        // Skip if parent is the Accept button (has F7jpS class)
+        if (parent && parent.classList && parent.classList.contains('F7jpS')) continue;
+        
+        // Check if this SVG or its parent is clickable
+        const clickableParent = svg.closest('[role="button"], button, [tabindex="0"]');
+        if (clickableParent && !clickableParent.classList.contains('F7jpS')) {
+          console.log('  Found X button via sGsBQ');
+          return clickableParent;
+        }
+        
+        // The SVG itself might be the click target
+        if (svg.style.cursor === 'pointer' || window.getComputedStyle(svg).cursor === 'pointer') {
+          console.log('  Found clickable X SVG');
+          return svg;
+        }
+      }
+    }
+    
+    // Method 2: Look for small icon buttons that aren't Accept
+    const allClickables = Array.from(container.querySelectorAll('div[role="button"], button, [tabindex="0"]'))
+      .filter(el => el.offsetParent && !el.classList.contains('F7jpS'));
+    
+    for (const el of allClickables) {
+      const rect = el.getBoundingClientRect();
+      // X buttons are usually small (under 40px)
+      if (rect.width < 40 && rect.height < 40) {
+        const svg = el.querySelector('svg');
+        if (svg) {
+          console.log('  Found small icon button (likely X)');
+          return el;
+        }
+      }
+    }
+    
+    // Method 3: Direct SVG path with cursor:pointer
+    const paths = container.querySelectorAll('svg path');
+    for (const path of paths) {
+      const svg = path.closest('svg');
+      if (svg && window.getComputedStyle(svg.parentElement || svg).cursor === 'pointer') {
+        // Make sure it's not inside the Accept button
+        const acceptBtn = path.closest('.F7jpS');
+        if (!acceptBtn) {
+          console.log('  Found clickable SVG path');
+          return svg.parentElement || svg;
+        }
+      }
+    }
+    
+    return null;
   }
 
   // Process one friend request entry
@@ -574,65 +635,35 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     console.log('  Filter:', shouldIgnore ? 'DECLINE (' + reason + ')' : 'ACCEPT');
     
     if (shouldIgnore) {
-      // To DECLINE: We need to hover/click on the entry to reveal the X/decline option
-      // Looking at the DOM, clicking on the row might open a menu or reveal buttons
-      
-      // Method 1: Try clicking on the container (not the accept button) to trigger decline flow
-      // First, find any clickable element in the container that's NOT the accept button
-      const clickables = Array.from(entry.container.querySelectorAll('[role="button"], button, [tabindex="0"]'))
-        .filter(el => el.offsetParent && el !== entry.acceptBtn && !entry.acceptBtn.contains(el));
-      
-      // Also check if the container itself is clickable
-      const containerClickable = entry.container.getAttribute('role') === 'button' || 
-                                  entry.container.tabIndex >= 0 ||
-                                  entry.container.style.cursor === 'pointer';
+      // DECLINE FLOW:
+      // 1. Find and click the X button (SVG in DIV.sGsBQ)
+      // 2. Wait for and click the "Ignore" confirmation button
       
       let declined = false;
       
-      // Try clicking the container first (might open a profile/options)
-      if (containerClickable || entry.container.onclick) {
-        console.log('  Clicking container to reveal decline option...');
-        await click(entry.container);
-        await delay(500);
+      // Find the X button
+      const xBtn = findXButton(entry.container);
+      
+      if (xBtn) {
+        console.log('  Clicking X button to open decline dialog...');
+        await click(xBtn);
+        await delay(600);
+        
+        // Now click the Ignore confirmation button
         declined = await confirmIgnore();
-      }
-      
-      // If that didn't work, try other clickable elements
-      if (!declined) {
-        for (const el of clickables) {
-          const txt = (el.textContent || '').trim().toLowerCase();
-          // Skip if it looks like accept or add
-          if (txt.includes('accept') || txt.includes('add')) continue;
-          
-          console.log('  Trying clickable element:', el.tagName, txt.substring(0, 20));
-          await click(el);
-          await delay(500);
-          
-          // Check if Ignore button appeared
-          declined = await confirmIgnore();
-          if (declined) break;
-        }
-      }
-      
-      // If still not declined, try simulating hover to reveal X button
-      if (!declined) {
-        // Dispatch mouseenter event to potentially reveal hidden buttons
+      } else {
+        console.log('  X button not found, trying alternative methods...');
+        
+        // Alternative: hover to reveal X button
         entry.container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-        await delay(500);
+        await delay(400);
         
-        // Look for newly visible X/decline buttons
-        const newBtns = Array.from(entry.container.querySelectorAll('button, [role="button"]'))
-          .filter(b => b.offsetParent && b !== entry.acceptBtn);
-        
-        for (const btn of newBtns) {
-          const txt = (btn.textContent || '').trim().toLowerCase();
-          if (txt === 'x' || txt === '×' || txt === '' || txt.includes('decline') || txt.includes('ignore')) {
-            console.log('  Found hidden X button after hover');
-            await click(btn);
-            await delay(500);
-            declined = await confirmIgnore();
-            if (declined) break;
-          }
+        const xBtnAfterHover = findXButton(entry.container);
+        if (xBtnAfterHover) {
+          console.log('  Found X button after hover');
+          await click(xBtnAfterHover);
+          await delay(600);
+          declined = await confirmIgnore();
         }
       }
       
@@ -641,8 +672,7 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
         console.log('  ✓ DECLINED:', reason, '-', name, username ? '@' + username : '');
         return { action: 'declined', reason };
       } else {
-        console.log('  ⚠ Could not find decline option - skipping (NOT accepting)');
-        // Show warning in UI only once
+        console.log('  ⚠ Could not decline - skipping (NOT accepting)');
         if (!declineButtonMissing) {
           declineButtonMissing = true;
           updateStatus('Decline button missing - some skipped', 'warning');
@@ -681,30 +711,55 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   
   // Click "View X more" button to load more friend requests
   async function clickViewMore() {
-    // Look for any clickable element with "view" and "more" and a number
-    const allElements = Array.from(document.querySelectorAll('button, a, [role="button"], span, div, p'))
+    // Based on recording: "View 123 More" is inside DIV.g8CcQ with SPAN.nonIntl
+    
+    // Method 1: Look for the specific class from recording
+    const g8CcQ = document.querySelector('div.g8CcQ');
+    if (g8CcQ) {
+      const text = g8CcQ.textContent.trim();
+      if (/view.*\d+.*more/i.test(text)) {
+        console.log('Found "View more" button via g8CcQ:', text);
+        await click(g8CcQ);
+        await delay(2000);
+        return true;
+      }
+    }
+    
+    // Method 2: Look for span.nonIntl with "View X More" text
+    const spans = Array.from(document.querySelectorAll('span.nonIntl'))
+      .filter(el => el.offsetParent);
+    
+    for (const span of spans) {
+      const text = span.textContent.trim();
+      if (/view.*\d+.*more/i.test(text)) {
+        console.log('Found "View more" span:', text);
+        // Click the span or its parent
+        const clickTarget = span.closest('[role="button"], button, [tabindex]') || span.parentElement || span;
+        await click(clickTarget);
+        await delay(2000);
+        return true;
+      }
+    }
+    
+    // Method 3: Generic search for any element with view/more text
+    const allElements = Array.from(document.querySelectorAll('button, a, [role="button"], span, div'))
       .filter(el => el.offsetParent && el.offsetHeight > 0);
     
     for (const el of allElements) {
       const text = (el.textContent || '').trim();
-      // Match various patterns:
-      // "View 24 more", "View 5 More", "Show more", "Load more", "See all", etc.
-      // Also match if it just contains a number and "more"
-      if (/view.*\d+.*more|\d+.*more|show.*more|load.*more|see.*more|see\s+all/i.test(text)) {
-        // Make sure it's not too long (avoid matching entire page sections)
-        if (text.length < 50) {
-          console.log('Found "View more" button:', text);
-          await click(el);
-          await delay(2000);
-          return true;
-        }
+      if (/view.*\d+.*more|show.*more|load.*more/i.test(text) && text.length < 50) {
+        console.log('Found "View more" button (generic):', text);
+        await click(el);
+        await delay(2000);
+        return true;
       }
     }
     
-    // Also try scrolling to bottom of friend list container
-    const friendList = document.querySelector('[class*="friend"], [class*="request"], [class*="list"]');
-    if (friendList) {
-      friendList.scrollTop = friendList.scrollHeight;
+    // Method 4: Scroll the ReactVirtualized container
+    const virtualList = document.querySelector('.ReactVirtualized__Grid');
+    if (virtualList) {
+      virtualList.scrollTop = virtualList.scrollHeight;
+      await delay(500);
     }
     
     return false;
