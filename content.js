@@ -541,65 +541,89 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   }
   
   // Find the X/close button in a friend entry (SVG inside DIV.sGsBQ)
-  function findXButton(container) {
-    // The X button is an SVG path inside DIV.sGsBQ
-    // It's in the same container as the Accept button but is the close/decline icon
+  function findXButton(entry) {
+    const acceptBtn = entry.acceptBtn;
+    const container = entry.container;
     
-    // Method 1: Look for SVG inside sGsBQ that's NOT the accept button
-    const sGsBQ = container.querySelector('div.sGsBQ');
+    // Based on recording: X button is SVG path inside DIV.sGsBQ
+    // The Accept button is ALSO inside DIV.sGsBQ
+    // So we find sGsBQ from the Accept button, then find sibling SVG
+    
+    console.log('  Looking for X button...');
+    
+    // Method 1: Find sGsBQ from Accept button (most reliable)
+    const sGsBQ = acceptBtn.closest('div.sGsBQ');
     if (sGsBQ) {
-      // Find all clickable SVG elements
-      const svgs = sGsBQ.querySelectorAll('svg');
+      console.log('  Found sGsBQ via Accept button');
+      
+      // Find all SVGs in sGsBQ that are NOT inside the Accept button
+      const svgs = Array.from(sGsBQ.querySelectorAll('svg'));
+      console.log('  SVGs in sGsBQ:', svgs.length);
+      
       for (const svg of svgs) {
+        // Skip if inside Accept button
+        if (acceptBtn.contains(svg)) {
+          console.log('    Skip: inside Accept btn');
+          continue;
+        }
+        
+        // Found the X button SVG!
+        console.log('  ✓ Found X button SVG');
+        
+        // The click target is the SVG's parent (or the SVG itself)
         const parent = svg.parentElement;
-        // Skip if parent is the Accept button (has F7jpS class)
-        if (parent && parent.classList && parent.classList.contains('F7jpS')) continue;
-        
-        // Check if this SVG or its parent is clickable
-        const clickableParent = svg.closest('[role="button"], button, [tabindex="0"]');
-        if (clickableParent && !clickableParent.classList.contains('F7jpS')) {
-          console.log('  Found X button via sGsBQ');
-          return clickableParent;
+        if (parent && parent !== sGsBQ) {
+          return parent;
         }
-        
-        // The SVG itself might be the click target
-        if (svg.style.cursor === 'pointer' || window.getComputedStyle(svg).cursor === 'pointer') {
-          console.log('  Found clickable X SVG');
-          return svg;
-        }
+        return svg;
       }
     }
     
-    // Method 2: Look for small icon buttons that aren't Accept
-    const allClickables = Array.from(container.querySelectorAll('div[role="button"], button, [tabindex="0"]'))
-      .filter(el => el.offsetParent && !el.classList.contains('F7jpS'));
-    
-    for (const el of allClickables) {
-      const rect = el.getBoundingClientRect();
-      // X buttons are usually small (under 40px)
-      if (rect.width < 40 && rect.height < 40) {
-        const svg = el.querySelector('svg');
-        if (svg) {
-          console.log('  Found small icon button (likely X)');
-          return el;
-        }
-      }
-    }
-    
-    // Method 3: Direct SVG path with cursor:pointer
-    const paths = container.querySelectorAll('svg path');
-    for (const path of paths) {
-      const svg = path.closest('svg');
-      if (svg && window.getComputedStyle(svg.parentElement || svg).cursor === 'pointer') {
-        // Make sure it's not inside the Accept button
-        const acceptBtn = path.closest('.F7jpS');
-        if (!acceptBtn) {
-          console.log('  Found clickable SVG path');
+    // Method 2: Find H8CAi container and look for SVGs
+    const h8cai = acceptBtn.closest('div.H8CAi') || container.querySelector('div.H8CAi');
+    if (h8cai) {
+      console.log('  Checking H8CAi');
+      const svgs = Array.from(h8cai.querySelectorAll('svg'));
+      for (const svg of svgs) {
+        if (!acceptBtn.contains(svg)) {
+          console.log('  ✓ Found X via H8CAi');
           return svg.parentElement || svg;
         }
       }
     }
     
+    // Method 3: Go up from Accept button and find sibling SVGs
+    let parent = acceptBtn.parentElement;
+    for (let i = 0; i < 5 && parent; i++) {
+      const svgs = Array.from(parent.querySelectorAll('svg'));
+      for (const svg of svgs) {
+        if (acceptBtn.contains(svg)) continue;
+        
+        const rect = svg.getBoundingClientRect();
+        // X icons are small (around 9x9 based on recording)
+        if (rect.width < 20 && rect.height < 20 && rect.width > 3) {
+          console.log('  ✓ Found small X SVG nearby:', rect.width, 'x', rect.height);
+          return svg.parentElement || svg;
+        }
+      }
+      parent = parent.parentElement;
+    }
+    
+    // Method 4: Search entire container
+    const allSvgs = Array.from(container.querySelectorAll('svg'));
+    console.log('  Searching all', allSvgs.length, 'SVGs in container');
+    
+    for (const svg of allSvgs) {
+      if (acceptBtn.contains(svg)) continue;
+      
+      const rect = svg.getBoundingClientRect();
+      if (rect.width < 20 && rect.height < 20 && rect.width > 3) {
+        console.log('  ✓ Found X SVG in container');
+        return svg.parentElement || svg;
+      }
+    }
+    
+    console.log('  ✗ No X button found');
     return null;
   }
 
@@ -641,8 +665,8 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       
       let declined = false;
       
-      // Find the X button
-      const xBtn = findXButton(entry.container);
+      // Find the X button (pass full entry so we can use acceptBtn)
+      const xBtn = findXButton(entry);
       
       if (xBtn) {
         console.log('  Clicking X button to open decline dialog...');
@@ -658,7 +682,7 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
         entry.container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
         await delay(400);
         
-        const xBtnAfterHover = findXButton(entry.container);
+        const xBtnAfterHover = findXButton(entry);
         if (xBtnAfterHover) {
           console.log('  Found X button after hover');
           await click(xBtnAfterHover);
@@ -783,7 +807,8 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     
     acceptedThisSession = 0;
     declinedThisSession = 0;
-    declineButtonMissing = false; // Reset warning flag
+    declineButtonMissing = false;
+    processed.clear(); // Clear processed set for fresh run
     await saveSessionStats();
     
     let entries = findEntries();
@@ -795,7 +820,8 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     let scrolls = 0;
     let declined = 0;
     let accepted = 0;
-    let total = 0;
+    let skipped = 0;
+    let noNewEntriesCount = 0; // Track consecutive times with no new entries
     
     while (isRunning && scrolls < settings.maxScrolls) {
       if (!canAcceptMore()) {
@@ -804,33 +830,46 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       }
       
       entries = findEntries();
-      console.log('Found', entries.length, 'entries');
       
-      if (entries.length === 0) {
-        console.log('No more entries visible...');
+      // Filter to only unprocessed entries
+      const unprocessedEntries = entries.filter(entry => {
+        const { name, username } = getInfo(entry.container, entry.acceptBtn);
+        const key = (username || name).toLowerCase();
+        return !processed.has(key);
+      });
+      
+      console.log('Found', entries.length, 'entries,', unprocessedEntries.length, 'unprocessed');
+      
+      if (unprocessedEntries.length === 0) {
+        noNewEntriesCount++;
+        console.log('No unprocessed entries (attempt', noNewEntriesCount, ')');
         
-        // First try to click "View X more" button
+        // After processing all visible, try View More
         const foundMore = await clickViewMore();
         if (foundMore) {
           console.log('Clicked View More, waiting for new entries...');
           await delay(2000);
-          continue; // Don't count as scroll, retry finding entries
+          noNewEntriesCount = 0; // Reset counter
+          continue;
         }
         
         // Scroll down to find more
-        console.log('Scrolling to find more...');
         window.scrollBy(0, 400);
         await delay(settings.scrollDelay);
-        
-        // Try View More again after scrolling
-        await clickViewMore();
-        await delay(1000);
-        
         scrolls++;
+        
+        // If we've tried 3 times with no new entries, stop
+        if (noNewEntriesCount >= 3) {
+          console.log('No new entries after multiple attempts, stopping.');
+          break;
+        }
         continue;
       }
       
-      for (const entry of entries) {
+      noNewEntriesCount = 0; // Reset since we have entries to process
+      
+      // Process each unprocessed entry ONCE
+      for (const entry of unprocessedEntries) {
         if (!isRunning) break;
         if (!canAcceptMore()) break;
         
@@ -838,14 +877,15 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
         
         if (result.action === 'declined') {
           declined++;
-          total++;
           await delay(randDelay(500, 1000));
         } else if (result.action === 'accepted') {
           accepted++;
-          total++;
           const acceptDelay = randDelay(settings.minDelay, settings.maxDelay);
           console.log('  Waiting', acceptDelay, 'ms...');
           await delay(acceptDelay);
+        } else if (result.action === 'skip') {
+          skipped++;
+          console.log('  Skipped, moving on...');
         } else if (result.action === 'limit') {
           break;
         }
@@ -853,14 +893,14 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
         await delay(randDelay(200, 400));
       }
       
-      window.scrollBy(0, 400);
-      await delay(settings.scrollDelay);
-      scrolls++;
+      // After processing current batch, try to load more
+      await clickViewMore();
+      await delay(1000);
     }
     
     await saveSessionEnd();
     
-    const msg = 'Done! Accepted: ' + accepted + ', Declined: ' + declined;
+    const msg = 'Done! Accepted: ' + accepted + ', Declined: ' + declined + ', Skipped: ' + skipped;
     console.log(msg);
     console.log('Limits - Session:', acceptedThisSession, 'Hour:', acceptedThisHour, 'Today:', acceptedToday);
     
