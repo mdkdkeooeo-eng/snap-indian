@@ -18,9 +18,11 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   let settings = null;
   let processed = new Set();
   let panel = null;
+  let declineButtonMissing = false; // Track if we've warned about missing decline button
   
   // Rate limiting counters
   let acceptedThisSession = 0;
+  let declinedThisSession = 0;
   let acceptedThisHour = 0;
   let acceptedToday = 0;
   let lastHourTimestamp = 0;
@@ -96,21 +98,96 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     acceptedThisHour++;
     acceptedToday++;
     await saveRateLimits();
+    await saveSessionStats();
     console.log('  Accepts - Session:', acceptedThisSession, 'Hour:', acceptedThisHour, 'Today:', acceptedToday);
   }
+  
+  async function incrementDeclineCount() {
+    declinedThisSession++;
+    await saveSessionStats();
+    console.log('  Declined this session:', declinedThisSession);
+  }
+  
+  async function saveSessionStats() {
+    try {
+      await chrome.storage.local.set({
+        acceptedThisSession,
+        declinedThisSession,
+        acceptedThisHour,
+        acceptedToday
+      });
+      // Also notify panel
+      chrome.runtime.sendMessage({
+        action: 'statsUpdate',
+        accepted: acceptedThisSession,
+        declined: declinedThisSession
+      }).catch(() => {});
+    } catch (e) {}
+  }
 
-  // Middle Eastern names
-  const middleEasternNames = ['ahmed','mohammed','muhammad','mohamed','mohammad','ali','hassan','hussain','hussein','omar','yusuf','yousef','ibrahim','abdullah','abdul','khalid','saad','tariq','zain','zayn','hamza','bilal','mustafa','osman','ismail','salman','karim','jamal','rashid','faisal','nasser','mahmoud','majid','noor','reza','saeed','samir','waleed','yazan','zaid','adnan','amir','farid','hadi','hani','jamil','kareem','malik','nasir','qasim','sadiq','shahid','tahir','zahir','zaki','amin','arif','aziz','bashir','emad','fahad','ghazi','habib','imran','javed','jawad','khalil','latif','nabeel','nadeem','naveed','nazir','rafiq','rizwan','sabir','sajid','saleem','samad','shafiq','shahzad','shakir','sharif','taha','waqar','waqas','waseem','yasir','zafar','zahid','zubair','khan','sheikh','syed','iqbal','mirza','ramita','rukhsar'];
+  // Middle Eastern name ROOTS/PREFIXES for fuzzy matching
+  // These catch variations like mohamad, mohmad, muhamed, mohmandolo, etc.
+  const nameRoots = [
+    'mohm', 'moha', 'muha', 'muhm', 'mahm', 'mohd',  // mohammad variants
+    'ahme', 'ahmd', 'ahm',  // ahmed variants
+    'hass', 'huss', 'husn',  // hassan/hussein
+    'ibra', 'abdu', 'abd',  // ibrahim/abdullah
+    'khal', 'khld',  // khalid/khalil
+    'must', 'mstf',  // mustafa
+    'osma', 'usmn',  // osman/usman
+    'isma', 'ism',  // ismail
+    'yusf', 'yous', 'yose',  // yusuf/yousef
+    'tarq', 'tariq',  // tariq
+    'hamz', 'hmza',  // hamza
+    'bila', 'blal',  // bilal
+    'rash', 'rshd',  // rashid
+    'fais', 'fysl',  // faisal
+    'nass', 'nasr',  // nasser/nasir
+    'qasi', 'qsm',  // qasim
+    'shah', 'shaz',  // shahid/shahzad
+    'waqr', 'wqs',  // waqar/waqas
+    'rizw', 'rzwn',  // rizwan
+    'jave', 'jwd',  // javed/jawad
+    'imra', 'imrn',  // imran
+    'nabi', 'ndm',  // nabeel/nadeem
+    'iqba', 'iqbl',  // iqbal
+    'zubr', 'zbr',  // zubair
+    'rami', 'rukh',  // ramita/rukhsar
+    'noor', 'nur',  // noor/nur
+    'sami', 'smr',  // samir
+  ];
+  
+  // Full names to match exactly or as substring
+  const middleEasternNames = ['ahmed','mohammed','muhammad','mohamed','mohammad','mohamad','muhamed','ali','hassan','hussain','hussein','omar','yusuf','yousef','ibrahim','abdullah','abdul','khalid','saad','tariq','zain','zayn','hamza','bilal','mustafa','osman','usman','ismail','salman','karim','jamal','rashid','faisal','nasser','mahmoud','majid','noor','reza','saeed','samir','waleed','yazan','zaid','adnan','amir','farid','hadi','hani','jamil','kareem','malik','nasir','qasim','sadiq','shahid','tahir','zahir','zaki','amin','arif','aziz','bashir','emad','fahad','ghazi','habib','imran','javed','jawad','khalil','latif','nabeel','nadeem','naveed','nazir','rafiq','rizwan','sabir','sajid','saleem','samad','shafiq','shahzad','shakir','sharif','taha','waqar','waqas','waseem','yasir','zafar','zahid','zubair','khan','sheikh','syed','iqbal','mirza','ramita','rukhsar','preet','singh','raj','kumar','patel','gupta','sharma','ankit','rohit','vikram','suresh','dinesh','rakesh'];
 
   // Female names
   const femaleNames = ['sarah','emily','jessica','jennifer','amanda','melissa','michelle','stephanie','nicole','elizabeth','ashley','samantha','lauren','rachel','lisa','kimberly','rebecca','amy','angela','maria','christina','kelly','susan','nancy','karen','betty','helen','sandra','donna','carol','ruth','sharon','laura','sophia','emma','olivia','ava','isabella','mia','charlotte','amelia','harper','evelyn','abigail','ella','mila','avery','camila','aria','scarlett','victoria','madison','luna','grace','chloe','penelope','layla','zoey','nora','hannah','lillian','addison','aubrey','ellie','stella','natalie','leah','hazel','violet','aurora','savannah','audrey','brooklyn','bella','claire','skylar','lucy','anna','caroline','nova','aaliyah','kennedy','allison','maya','willow','naomi','elena','ariana','gabriella','alice','ruby','eva','autumn','hailey','gianna','valentina','isla','ivy','sadie','piper','lydia','alexa','emilia','ariel','mackenzie','brianna','kylie','morgan','julia','kaylee','destiny','bailey','riley','zoe','alexis','jasmine','brooke','kayla','taylor','sydney','andrea','vanessa','brittany','danielle'];
 
   function isNonAmerican(name, user) {
-    const text = (name + ' ' + user).toLowerCase();
+    const text = (name + ' ' + user).toLowerCase().replace(/[^a-z]/g, '');
+    
+    // Check full name matches
     for (const n of middleEasternNames) {
-      if (text.includes(n)) return true;
+      if (text.includes(n)) {
+        console.log('  → Matched full name:', n);
+        return true;
+      }
     }
-    if (/[^\x00-\x7F]/.test(text)) return true;
+    
+    // Check root/prefix matches (catches mohmandolo, ahmedxxx, etc)
+    for (const root of nameRoots) {
+      if (text.includes(root)) {
+        console.log('  → Matched root pattern:', root);
+        return true;
+      }
+    }
+    
+    // Check for non-ASCII characters (foreign scripts)
+    if (/[^\x00-\x7F]/.test(name + user)) {
+      console.log('  → Contains non-ASCII characters');
+      return true;
+    }
+    
     return false;
   }
 
@@ -361,10 +438,16 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       }
       
       if (declined) {
+        await incrementDeclineCount();
         console.log('  ✓ DECLINED:', reason, '-', name, username ? '@' + username : '');
         return { action: 'declined', reason };
       } else {
         console.log('  ⚠ Could not find decline option - skipping (NOT accepting)');
+        // Show warning in UI only once
+        if (!declineButtonMissing) {
+          declineButtonMissing = true;
+          updateStatus('Decline button missing - some skipped', 'warning');
+        }
         return { action: 'skip', reason: 'no decline button found' };
       }
       
@@ -414,6 +497,9 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     }
     
     acceptedThisSession = 0;
+    declinedThisSession = 0;
+    declineButtonMissing = false; // Reset warning flag
+    await saveSessionStats();
     
     let entries = findEntries();
     if (entries.length === 0) {
@@ -481,10 +567,10 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     updateStatus(msg);
   }
 
-  function updateStatus(msg) {
+  function updateStatus(msg, type = 'stopped') {
     chrome.runtime.sendMessage({
       action: 'statusUpdate',
-      status: 'stopped',
+      status: type,
       message: msg
     }).catch(() => {});
   }

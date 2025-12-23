@@ -84,6 +84,60 @@
     .btn-secondary { background: #333; color: #fff; }
     .btn-secondary:hover { background: #444; }
     .btn-small { padding: 8px; font-size: 12px; }
+    
+    /* Stats boxes */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .stat-box {
+      background: #2a2a2a;
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat-box.accepted { border-left: 3px solid #4CAF50; }
+    .stat-box.declined { border-left: 3px solid #f44336; }
+    .stat-box.limit { border-left: 3px solid #2196F3; }
+    .stat-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+    .stat-progress {
+      font-size: 11px;
+      color: #FFFC00;
+      margin-top: 4px;
+    }
+    
+    /* Limits row */
+    .limits-row {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    .limit-badge {
+      background: #2a2a2a;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      flex: 1;
+      text-align: center;
+      min-width: 80px;
+    }
+    .limit-badge .num {
+      color: #FFFC00;
+      font-weight: bold;
+    }
+    
     .status {
       margin-top: 10px;
       padding: 10px;
@@ -94,26 +148,8 @@
     .status.running { background: rgba(33,150,243,0.2); color: #64b5f6; border: 1px solid #2196F3; }
     .status.stopped { background: rgba(100,100,100,0.2); color: #aaa; border: 1px solid #666; }
     .status.error { background: rgba(244,67,54,0.2); color: #ef5350; border: 1px solid #f44336; }
-    .stats {
-      display: flex;
-      justify-content: space-around;
-      background: #2a2a2a;
-      padding: 10px;
-      border-radius: 4px;
-      margin: 10px 0;
-    }
-    .stat {
-      text-align: center;
-    }
-    .stat-value {
-      font-size: 18px;
-      font-weight: bold;
-      color: #FFFC00;
-    }
-    .stat-label {
-      font-size: 10px;
-      color: #888;
-    }
+    .status.warning { background: rgba(255,152,0,0.2); color: #ffb74d; border: 1px solid #ff9800; }
+    
     .close-btn {
       position: absolute;
       top: 10px;
@@ -140,18 +176,28 @@
   <div class="panel">
     <h1>Snapchat Friend Filter</h1>
     
-    <div class="stats">
-      <div class="stat">
-        <div class="stat-value" id="statSession">0</div>
-        <div class="stat-label">Session</div>
+    <!-- Session Stats -->
+    <div class="stats-grid">
+      <div class="stat-box accepted">
+        <div class="stat-value" id="statAccepted">0</div>
+        <div class="stat-label">Accepted</div>
       </div>
-      <div class="stat">
-        <div class="stat-value" id="statHour">0</div>
-        <div class="stat-label">Hour</div>
+      <div class="stat-box declined">
+        <div class="stat-value" id="statDeclined">0</div>
+        <div class="stat-label">Declined</div>
       </div>
-      <div class="stat">
-        <div class="stat-value" id="statToday">0</div>
-        <div class="stat-label">Today</div>
+    </div>
+    
+    <!-- Limits Progress -->
+    <div class="limits-row">
+      <div class="limit-badge">
+        Session<br><span class="num" id="limitSession">0/30</span>
+      </div>
+      <div class="limit-badge">
+        Hourly<br><span class="num" id="limitHourly">0/20</span>
+      </div>
+      <div class="limit-badge">
+        Daily<br><span class="num" id="limitDaily">0/100</span>
       </div>
     </div>
     
@@ -175,7 +221,6 @@
       <div class="field">
         <label>Session Break (mins)</label>
         <input type="number" id="sessionBreakMins" value="30" min="0" step="5">
-        <div class="help">Wait time between sessions</div>
       </div>
     </div>
     
@@ -221,7 +266,7 @@
     <div class="row" style="margin-top: 10px;">
       <button class="btn-secondary btn-small" id="debugBtn" style="flex:1;">Debug</button>
       <button class="btn-secondary btn-small" id="findBtn" style="flex:1;">Find Buttons</button>
-      <button class="btn-secondary btn-small" id="resetBtn" style="flex:1;">Reset Limits</button>
+      <button class="btn-secondary btn-small" id="resetBtn" style="flex:1;">Reset</button>
     </div>
     
     <div id="status" class="status stopped">Ready</div>

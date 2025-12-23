@@ -30,23 +30,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('filterNonAmerican').checked = s.filterNonAmerican;
     document.getElementById('filterBrownEmoji').checked = s.filterBrownEmoji;
     document.getElementById('humanLikeMouse').checked = s.humanLikeMouse;
+    
+    // Update limit displays
+    updateLimitDisplays(s);
   } catch (e) {
     console.error('Error loading settings:', e);
   }
   
-  // Load stats
+  // Load and display stats
   updateStats();
-  setInterval(updateStats, 5000);
+  setInterval(updateStats, 2000);
   
   updateStatus('stopped', 'Ready');
 });
 
+// Update limit badge displays
+function updateLimitDisplays(settings) {
+  const maxSession = settings?.maxSession || document.getElementById('maxSession').value || 30;
+  const maxHourly = settings?.maxHourly || document.getElementById('maxHourly').value || 20;
+  const maxDaily = settings?.maxDaily || document.getElementById('maxDaily').value || 100;
+  
+  // Get current counts from storage
+  chrome.storage.local.get(['acceptedThisSession', 'acceptedThisHour', 'acceptedToday', 'declinedThisSession'], (data) => {
+    const session = data.acceptedThisSession || 0;
+    const hour = data.acceptedThisHour || 0;
+    const today = data.acceptedToday || 0;
+    
+    document.getElementById('limitSession').textContent = session + '/' + (maxSession || '∞');
+    document.getElementById('limitHourly').textContent = hour + '/' + (maxHourly || '∞');
+    document.getElementById('limitDaily').textContent = today + '/' + (maxDaily || '∞');
+  });
+}
+
 // Update stats display
 async function updateStats() {
   try {
-    const data = await chrome.storage.local.get(['acceptedToday', 'acceptedThisHour']);
-    document.getElementById('statToday').textContent = data.acceptedToday || 0;
-    document.getElementById('statHour').textContent = data.acceptedThisHour || 0;
+    const data = await chrome.storage.local.get([
+      'acceptedToday', 'acceptedThisHour', 'acceptedThisSession', 
+      'declinedThisSession', 'totalAccepted', 'totalDeclined'
+    ]);
+    
+    document.getElementById('statAccepted').textContent = data.acceptedThisSession || 0;
+    document.getElementById('statDeclined').textContent = data.declinedThisSession || 0;
+    
+    // Also update limits
+    updateLimitDisplays();
   } catch (e) {}
 }
 
@@ -67,6 +95,7 @@ function saveSettings() {
   };
   
   chrome.storage.sync.set(settings);
+  updateLimitDisplays(settings);
   return settings;
 }
 
@@ -93,8 +122,13 @@ function sendMessage(action, data = {}) {
 // Start button
 document.getElementById('startBtn').addEventListener('click', async () => {
   const settings = saveSettings();
+  
+  // Reset session stats
+  await chrome.storage.local.set({ acceptedThisSession: 0, declinedThisSession: 0 });
+  document.getElementById('statAccepted').textContent = '0';
+  document.getElementById('statDeclined').textContent = '0';
+  
   updateStatus('running', 'Starting...');
-  document.getElementById('statSession').textContent = '0';
   
   try {
     const response = await sendMessage('start', { settings });
@@ -152,10 +186,16 @@ document.getElementById('findBtn').addEventListener('click', async () => {
 document.getElementById('resetBtn').addEventListener('click', async () => {
   try {
     await sendMessage('resetLimits');
-    document.getElementById('statSession').textContent = '0';
-    document.getElementById('statHour').textContent = '0';
-    document.getElementById('statToday').textContent = '0';
-    updateStatus('stopped', 'Limits reset!');
+    await chrome.storage.local.set({ 
+      acceptedThisSession: 0, 
+      declinedThisSession: 0,
+      acceptedThisHour: 0,
+      acceptedToday: 0
+    });
+    document.getElementById('statAccepted').textContent = '0';
+    document.getElementById('statDeclined').textContent = '0';
+    updateLimitDisplays();
+    updateStatus('stopped', 'All stats reset!');
   } catch (e) {
     updateStatus('error', e.message);
   }
@@ -168,22 +208,33 @@ document.getElementById('closeBtn').addEventListener('click', async () => {
   } catch (e) {}
 });
 
-// Listen for status updates
-window.addEventListener('message', (event) => {
-  if (event.data && event.data.action === 'statusUpdate') {
-    updateStatus(event.data.status, event.data.message);
-    if (event.data.status === 'stopped') {
+// Listen for status updates from content script
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'statusUpdate') {
+    updateStatus(msg.status, msg.message);
+    if (msg.status === 'stopped' || msg.status === 'error' || msg.status === 'warning') {
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
     }
     updateStats();
   }
+  
+  if (msg.action === 'statsUpdate') {
+    if (msg.accepted !== undefined) {
+      document.getElementById('statAccepted').textContent = msg.accepted;
+    }
+    if (msg.declined !== undefined) {
+      document.getElementById('statDeclined').textContent = msg.declined;
+    }
+    updateLimitDisplays();
+  }
 });
 
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.action === 'statusUpdate') {
-    updateStatus(msg.status, msg.message);
-    if (msg.status === 'stopped') {
+// Also listen for postMessage from parent (content script)
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'statusUpdate') {
+    updateStatus(event.data.status, event.data.message);
+    if (event.data.status === 'stopped') {
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
     }
