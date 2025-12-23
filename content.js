@@ -5,6 +5,56 @@ let processedUsernames = new Set();
 let panelContainer = null;
 let panelIframe = null;
 
+// Global flag to prevent user interaction
+let userInteractionBlocked = false;
+
+// Prevent user interaction when bot is running
+function preventUserInteraction() {
+  if (userInteractionBlocked) return;
+  userInteractionBlocked = true;
+  
+  // Disable scrolling
+  document.body.style.overflow = 'hidden';
+  document.documentElement.style.overflow = 'hidden';
+  
+  // Prevent scroll events
+  const preventScroll = (e) => {
+    if (isRunning) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  };
+  
+  // Prevent wheel/scroll
+  document.addEventListener('wheel', preventScroll, { passive: false, capture: true });
+  document.addEventListener('scroll', preventScroll, { passive: false, capture: true });
+  document.addEventListener('touchmove', preventScroll, { passive: false, capture: true });
+  
+  // Prevent keyboard scrolling
+  document.addEventListener('keydown', (e) => {
+    if (isRunning && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End' || e.key === ' ')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }, { capture: true });
+  
+  // Add overlay to prevent clicks (optional - might be too aggressive)
+  // We'll just prevent scrolling for now
+}
+
+function allowUserInteraction() {
+  if (!userInteractionBlocked) return;
+  userInteractionBlocked = false;
+  
+  // Re-enable scrolling
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+  
+  // Note: Event listeners will be re-added next time bot starts
+}
+
 // Create and inject panel
 function createPanel() {
   if (panelContainer) {
@@ -48,6 +98,39 @@ function removePanel() {
     panelContainer.style.display = 'none';
   }
 }
+
+// Common Middle Eastern names (English spellings)
+const middleEasternNames = [
+  // Arabic/Muslim first names
+  'ahmed', 'mohammed', 'muhammad', 'mohamed', 'mohammad', 'ali', 'hassan', 'hussain', 'hussein',
+  'omar', 'yusuf', 'yousef', 'ibrahim', 'abdullah', 'abdul', 'khalid', 'saad', 'tariq', 'zain',
+  'zayn', 'yasin', 'yaseen', 'hamza', 'bilal', 'mustafa', 'osman', 'ismail', 'ismael', 'salman',
+  'suleiman', 'sulaiman', 'karim', 'jamal', 'rashid', 'faisal', 'nasser', 'nassir', 'youssef',
+  'mahmoud', 'mahmud', 'majid', 'noor', 'nur', 'reza', 'reza', 'saeed', 'said', 'samir',
+  'tamer', 'tariq', 'waleed', 'waleed', 'yazan', 'zaid', 'zayd', 'adnan', 'amir', 'farid',
+  'hadi', 'hani', 'hasan', 'jamil', 'kareem', 'malik', 'nasir', 'qasim', 'raheem', 'rauf',
+  'sadiq', 'shahid', 'tahir', 'waheed', 'yusuf', 'zahir', 'zaki', 'amin', 'arif', 'asif',
+  'aziz', 'bashir', 'daniyal', 'emad', 'fahad', 'ghazi', 'habib', 'imran', 'javed', 'jawad',
+  'khalil', 'latif', 'majeed', 'nabeel', 'nadeem', 'najib', 'naseem', 'naveed', 'nazir',
+  'qadir', 'rafiq', 'raheel', 'raiyan', 'rameez', 'rashad', 'rayyan', 'rizwan', 'sabir',
+  'sadiq', 'sajid', 'saleem', 'salim', 'samad', 'shafiq', 'shahzad', 'shakir', 'sharif',
+  'taha', 'tahir', 'tariq', 'taufiq', 'waqar', 'waqas', 'waseem', 'yasir', 'younis',
+  'yusuf', 'zafar', 'zahid', 'zain', 'zaki', 'zaman', 'zubair', 'zulfiqar',
+  
+  // Middle Eastern last names
+  'abbas', 'abdullah', 'ahmad', 'akhtar', 'ali', 'ansari', 'arif', 'ashraf', 'aziz', 'baig',
+  'bashir', 'chaudhry', 'chaudhary', 'hassan', 'hussain', 'ibrahim', 'khan', 'malik', 'mohammed',
+  'noor', 'qadir', 'rahman', 'rashid', 'saeed', 'shah', 'sheikh', 'siddiqui', 'syed', 'tariq',
+  'yusuf', 'zaman', 'abbasi', 'adnan', 'ahsan', 'akram', 'alavi', 'amjad', 'arif', 'asghar',
+  'atif', 'awan', 'azhar', 'bhatti', 'butt', 'chohan', 'danish', 'farooq', 'ghani', 'haider',
+  'hamid', 'hashmi', 'hassan', 'hayat', 'hussain', 'imran', 'iqbal', 'irfan', 'jamil', 'jawad',
+  'khalid', 'latif', 'mahmood', 'mansoor', 'masood', 'memon', 'mirza', 'mohsin', 'nadeem',
+  'naseem', 'naveed', 'nazir', 'qadri', 'qamar', 'qazi', 'raees', 'rafiq', 'raheel', 'raiyan',
+  'rameez', 'rashad', 'rayyan', 'rizwan', 'sabir', 'sadiq', 'sajid', 'saleem', 'salim',
+  'samad', 'shafiq', 'shahzad', 'shakir', 'sharif', 'taha', 'tahir', 'tariq', 'taufiq',
+  'waqar', 'waqas', 'waseem', 'yasir', 'younis', 'yusuf', 'zafar', 'zahid', 'zain', 'zaki',
+  'zaman', 'zubair', 'zulfiqar'
+];
 
 // Non-American name patterns
 const nonAmericanPatterns = [
@@ -131,10 +214,73 @@ async function humanLikeClick(element) {
 function isNonAmericanName(name, username) {
   const textToCheck = `${name} ${username}`.toLowerCase();
   
+  // Check for Middle Eastern names (English spellings)
+  const nameParts = textToCheck.split(/\s+/);
+  for (const part of nameParts) {
+    if (middleEasternNames.includes(part.toLowerCase())) {
+      return true;
+    }
+  }
+  
+  // Check for non-American patterns
   for (const pattern of nonAmericanPatterns) {
     if (pattern.test(textToCheck)) {
       return true;
     }
+  }
+  
+  return false;
+}
+
+// Check if name sounds female
+function isFemaleName(name, username) {
+  const textToCheck = `${name} ${username}`.toLowerCase();
+  const firstWord = name.split(/\s+/)[0].toLowerCase();
+  
+  // Common female first names (most common American female names)
+  const commonFemaleFirstNames = [
+    'sarah', 'emily', 'jessica', 'jennifer', 'amanda', 'melissa', 'michelle', 'stephanie', 
+    'nicole', 'elizabeth', 'ashley', 'samantha', 'lauren', 'rachel', 'lisa', 'kimberly', 
+    'rebecca', 'katherine', 'amy', 'angela', 'maria', 'christina', 'kelly', 'susan', 'nancy', 
+    'karen', 'betty', 'helen', 'sandra', 'donna', 'carol', 'ruth', 'sharon', 'laura', 
+    'deborah', 'sophia', 'emma', 'olivia', 'ava', 'isabella', 'mia', 'charlotte', 'amelia', 
+    'harper', 'evelyn', 'abigail', 'ella', 'mila', 'avery', 'camila', 'aria', 'scarlett', 
+    'victoria', 'madison', 'luna', 'grace', 'chloe', 'penelope', 'layla', 'zoey', 'nora', 
+    'eleanor', 'hannah', 'lillian', 'addison', 'aubrey', 'ellie', 'stella', 'natalie', 
+    'leah', 'hazel', 'violet', 'aurora', 'savannah', 'audrey', 'brooklyn', 'bella', 'claire', 
+    'skylar', 'lucy', 'paisley', 'everly', 'anna', 'caroline', 'nova', 'genesis', 'aaliyah', 
+    'kennedy', 'kinsley', 'allison', 'maya', 'willow', 'naomi', 'elena', 'ariana', 'gabriella', 
+    'alice', 'madelyn', 'cora', 'ruby', 'eva', 'serenity', 'autumn', 'adeline', 'hailey', 
+    'gianna', 'valentina', 'isla', 'quinn', 'nevaeh', 'ivy', 'sadie', 'piper', 'lydia', 
+    'alexa', 'josephine', 'emilia', 'ariel', 'eliana', 'catherine', 'peyton', 'rylee', 
+    'mackenzie', 'aubree', 'brianna', 'makenzie', 'payton', 'delilah', 'isabelle', 'jocelyn', 
+    'kylie', 'morgan', 'julia', 'kaylee', 'destiny', 'bailey', 'riley', 'zoe', 'alexis', 
+    'jasmine', 'alexandra', 'brooke', 'kayla', 'taylor', 'sydney', 'kaitlyn', 'andrea', 
+    'vanessa', 'brittany', 'danielle', 'mother', 'mom', 'mommy', 'mama', 'wife', 'wifey',
+    'kam' // From the log - "Kam Smalls" appears to be female
+  ];
+  
+  // Check if first name is in female names list
+  if (commonFemaleFirstNames.includes(firstWord)) {
+    return true;
+  }
+  
+  // Check for female indicators in username
+  const femaleUsernameIndicators = [
+    /princess|queen|goddess|barbie|doll|girly|girl|miss|mrs|ms|mom|mommy|mama|wife|wifey|babe|babygirl|cutie|sweetie|honey|beauty|pretty|gorgeous|diva|doll|angel|butterfly|flower|rose|lily/i,
+    /^[a-z]+(a|ia|ella|ina|ana|ena|elle|ette)$/i, // Ends with common female suffix
+  ];
+  
+  for (const pattern of femaleUsernameIndicators) {
+    if (pattern.test(username)) {
+      return true;
+    }
+  }
+  
+  // Check for female name endings in first name
+  const femaleEndings = /(a|ia|ella|ina|ana|ena|elle|ette|elle)$/i;
+  if (femaleEndings.test(firstWord) && firstWord.length > 3) {
+    return true;
   }
   
   return false;
@@ -482,6 +628,13 @@ function findFriendEntries() {
       continue;
     }
     
+    // Class-based detection (from log: "F7jpS eKaL7 Bnaur zUzvu" for Accept buttons)
+    const className = btn.className || '';
+    if (className.includes('F7jpS') && text.toLowerCase() === 'accept') {
+      acceptButtons.push(btn);
+      continue;
+    }
+    
     // Icon-based detection - look for person+plus icon
     const svg = btn.querySelector('svg');
     if (svg) {
@@ -609,12 +762,24 @@ function extractFriendInfo(entry) {
 async function handleIgnoreConfirmation() {
   await new Promise(resolve => setTimeout(resolve, randomDelay(200, 400)));
   
-  // Look for confirmation dialog by finding buttons with "Ignore" text
+  // Look for confirmation dialog - button with class "tXFz7" and text "Ignore" (from log)
   const allButtons = Array.from(document.querySelectorAll('button'));
-  const ignoreBtn = allButtons.find(btn => {
+  let ignoreBtn = allButtons.find(btn => {
+    if (btn.offsetParent === null) return false;
     const text = btn.textContent.trim();
-    return text.includes('Ignore') && !text.includes('Cancel') && btn.offsetParent !== null;
+    const className = btn.className || '';
+    // Look for button with class "tXFz7" and text "Ignore"
+    return className.includes('tXFz7') && text === 'Ignore';
   });
+  
+  // Fallback: text-based detection
+  if (!ignoreBtn) {
+    ignoreBtn = allButtons.find(btn => {
+      if (btn.offsetParent === null) return false;
+      const text = btn.textContent.trim();
+      return text === 'Ignore' && !text.includes('Cancel');
+    });
+  }
   
   if (ignoreBtn) {
     try {
@@ -651,7 +816,7 @@ async function processFriendEntry(entry) {
       return false; // Already processed or no Accept button
     }
     
-    // Check if should ignore
+    // Check if should ignore (non-American OR female)
     let shouldIgnore = false;
     let reason = '';
     
@@ -665,13 +830,22 @@ async function processFriendEntry(entry) {
       reason = 'Non-American name pattern';
     }
     
+    // Check if female (always filter females)
+    if (isFemaleName(name, username)) {
+      shouldIgnore = true;
+      reason = 'Female name detected';
+    }
+    
     if (shouldIgnore) {
       // Find X/ignore button - look for buttons that are not Accept
+      // Also check for clickable divs/spans that might be the decline button
       const allButtons = Array.from(entry.querySelectorAll('button')).filter(btn => btn.offsetParent !== null);
+      const allClickables = Array.from(entry.querySelectorAll('[role="button"], [onclick], [tabindex="0"]')).filter(el => el.offsetParent !== null);
+      const allElements = [...allButtons, ...allClickables];
       let ignoreBtn = null;
       
       // Method 1: Text/aria-label based detection
-      for (const btn of allButtons) {
+      for (const btn of allElements) {
         const text = btn.textContent.trim().toLowerCase();
         const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
         const title = (btn.getAttribute('title') || '').toLowerCase();
@@ -689,7 +863,7 @@ async function processFriendEntry(entry) {
       // Method 2: Icon-based detection - look for X icon (SVG)
       if (!ignoreBtn) {
         const acceptBtn = findAcceptButton(entry);
-        for (const btn of allButtons) {
+        for (const btn of allElements) {
           // Skip Accept button and Friends button
           if (btn === acceptBtn) continue;
           
@@ -702,30 +876,62 @@ async function processFriendEntry(entry) {
           
           const svg = btn.querySelector('svg');
           if (svg) {
-            // X icon typically has simple paths (2-4 paths, often crossing lines)
+            // X icon typically has simple paths (1-2 paths, often crossing lines)
             const paths = svg.querySelectorAll('path, line, polyline');
             const pathCount = paths.length;
+            const viewBox = svg.getAttribute('viewBox') || '';
             
-            // X icon is usually simple (2-4 elements)
-            if (pathCount >= 1 && pathCount <= 6) {
+            // X icon is usually simple (1-2 paths) and often has viewBox like "0 0 24 24" or "0 0 14 14"
+            if (pathCount >= 1 && pathCount <= 3) {
               // Check if it's not the Accept button
               if (!text.includes('accept') && !ariaLabel.includes('accept') && !ariaLabel.includes('add')) {
-                // Likely the X/close button
-                ignoreBtn = btn;
-                break;
+                // Check path data for X pattern (crossing lines)
+                const pathData = Array.from(paths).map(p => p.getAttribute('d') || '').join(' ');
+                // X icons often have M (move) and L (line) commands that cross
+                if (pathData.includes('M') && (pathData.includes('L') || pathData.includes('l'))) {
+                  ignoreBtn = btn;
+                  break;
+                }
               }
             }
           }
         }
       }
       
-      // Method 3: Position-based - X button is usually last or second-to-last
-      // Exclude Friends button and Accept button
-      if (!ignoreBtn && allButtons.length > 1) {
+      // Method 3: Look for small icon buttons (X buttons are usually small, 24-36px)
+      if (!ignoreBtn) {
         const acceptBtn = findAcceptButton(entry);
-        // Reverse order to check last buttons first
-        for (let i = allButtons.length - 1; i >= 0; i--) {
-          const btn = allButtons[i];
+        for (const btn of allElements) {
+          if (btn === acceptBtn) continue;
+          
+          const rect = btn.getBoundingClientRect();
+          const text = btn.textContent.trim().toLowerCase();
+          const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+          
+          // Skip Friends button
+          if ((text === 'friends' || ariaLabel === 'friends') ||
+              (text.includes('friend') && !text.includes('ignore') && !text.includes('dismiss'))) {
+            continue;
+          }
+          
+          // X buttons are usually small square buttons (24-36px)
+          if (rect.width <= 40 && rect.height <= 40 && rect.width >= 20 && rect.height >= 20) {
+            // Check if it has an SVG (icon button)
+            if (btn.querySelector('svg')) {
+              ignoreBtn = btn;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Method 4: Position-based - X button is usually last or second-to-last
+      // Exclude Friends button and Accept button
+      if (!ignoreBtn && allElements.length > 1) {
+        const acceptBtn = findAcceptButton(entry);
+        // Reverse order to check last elements first
+        for (let i = allElements.length - 1; i >= 0; i--) {
+          const btn = allElements[i];
           if (btn === acceptBtn) continue; // Skip Accept button
           
           const text = btn.textContent.trim().toLowerCase();
@@ -743,10 +949,10 @@ async function processFriendEntry(entry) {
         }
       }
       
-      // Method 4: Last resort - any visible button that's not Accept or Friends
+      // Method 5: Last resort - any visible element that's not Accept or Friends
       if (!ignoreBtn) {
         const acceptBtn = findAcceptButton(entry);
-        ignoreBtn = allButtons.find(btn => {
+        ignoreBtn = allElements.find(btn => {
           if (btn === acceptBtn) return false;
           const text = btn.textContent.trim().toLowerCase();
           const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
@@ -768,7 +974,19 @@ async function processFriendEntry(entry) {
         console.log(`  ⚠ Could not find ignore button for ${name}`);
       }
     } else {
-      console.log(`  ✓ Keeping: ${name} (@${username})`);
+      // Accept the friend request
+      const acceptBtn = findAcceptButton(entry);
+      if (acceptBtn && acceptBtn.offsetParent !== null) {
+        try {
+          await humanLikeClick(acceptBtn);
+          console.log(`  ✓ Accepted: ${name} (@${username}) - American male`);
+          return false; // Not ignored, but processed
+        } catch (e) {
+          console.error(`  Error accepting ${name}:`, e);
+        }
+      } else {
+        console.log(`  ⚠ Could not find accept button for ${name}`);
+      }
     }
   } catch (e) {
     console.error('Error processing friend entry:', e);
@@ -777,33 +995,77 @@ async function processFriendEntry(entry) {
   return false;
 }
 
-// Scroll friend list
+// Scroll friend list - only when bot is running
 async function scrollFriendList() {
-  // Find scrollable container
-  const scrollSelectors = [
-    'div[class*="scroll"]',
-    'div[class*="list"]',
-    'div[class*="container"]',
-    'div[role="list"]',
-    'div[role="listbox"]',
-  ];
+  if (!isRunning) return false;
   
-  let scrollContainer = null;
-  for (const selector of scrollSelectors) {
-    scrollContainer = document.querySelector(selector);
-    if (scrollContainer) break;
+  // Temporarily allow scrolling for bot
+  const wasBlocked = userInteractionBlocked;
+  if (wasBlocked) {
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
   }
   
-  if (scrollContainer) {
-    const lastHeight = scrollContainer.scrollHeight;
-    scrollContainer.scrollTop += 500;
-    await new Promise(resolve => setTimeout(resolve, currentSettings.scrollDelay));
-    return scrollContainer.scrollHeight !== lastHeight;
-  } else {
-    // Fallback: scroll window
-    window.scrollBy(0, 500);
-    await new Promise(resolve => setTimeout(resolve, currentSettings.scrollDelay));
-    return true;
+  try {
+    // Find scrollable container - look for friend requests list
+    const scrollSelectors = [
+      'div[class*="scroll"]',
+      'div[class*="list"]',
+      'div[class*="container"]',
+      'div[role="list"]',
+      'div[role="listbox"]',
+      // Look for container that has Accept buttons
+      'div:has(button.F7jpS)',
+    ];
+    
+    let scrollContainer = null;
+    for (const selector of scrollSelectors) {
+      try {
+        scrollContainer = document.querySelector(selector);
+        if (scrollContainer) {
+          // Verify it's scrollable
+          if (scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+            break;
+          }
+        }
+      } catch (e) {
+        // :has() selector might not be supported, skip
+        continue;
+      }
+    }
+    
+    if (scrollContainer) {
+      const lastHeight = scrollContainer.scrollHeight;
+      scrollContainer.scrollTop += 500;
+      await new Promise(resolve => setTimeout(resolve, currentSettings.scrollDelay));
+      const scrolled = scrollContainer.scrollHeight !== lastHeight;
+      
+      // Re-block scrolling if it was blocked
+      if (wasBlocked) {
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+      }
+      return scrolled;
+    } else {
+      // Fallback: scroll window (but only if bot is running)
+      const lastScrollY = window.scrollY;
+      window.scrollBy(0, 500);
+      await new Promise(resolve => setTimeout(resolve, currentSettings.scrollDelay));
+      
+      // Re-block scrolling if it was blocked
+      if (wasBlocked) {
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+      }
+      return window.scrollY !== lastScrollY;
+    }
+  } catch (e) {
+    // Re-block scrolling if it was blocked
+    if (wasBlocked) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    }
+    return false;
   }
 }
 
@@ -931,6 +1193,9 @@ async function processFriendRequests() {
   console.log(`\nProcessing complete! Processed: ${processedCount}, Ignored: ${ignoredCount}`);
   isRunning = false;
   
+  // Re-enable user interaction
+  allowUserInteraction();
+  
   // Notify popup and panel
   chrome.runtime.sendMessage({
     action: 'statusUpdate',
@@ -976,11 +1241,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     isRunning = true;
     processedUsernames.clear();
     
+    // Prevent user interaction
+    preventUserInteraction();
+    
     processFriendRequests();
     sendResponse({ success: true });
     return true;
   } else if (message.action === 'stop') {
     isRunning = false;
+    allowUserInteraction();
     sendResponse({ success: true });
     return true;
   } else if (message.action === 'getStatus') {
