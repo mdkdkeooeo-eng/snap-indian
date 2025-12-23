@@ -1413,26 +1413,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Auto-open panel when page loads (if on Snapchat)
-// Check storage to see if panel should be open
-chrome.storage.local.get(['panelOpen'], (result) => {
-  if (verifySnapchatWeb() && result.panelOpen !== false) {
-    // Wait for page to be ready
-    const tryCreatePanel = () => {
+// Always open panel by default when Snapchat loads
+(function autoOpenPanel() {
+  if (!verifySnapchatWeb()) {
+    return;
+  }
+  
+  const tryCreatePanel = () => {
+    try {
       if (document.body) {
+        // Check if panel already exists
+        const existing = document.getElementById('snapchat-filter-panel');
+        if (existing) {
+          existing.style.display = 'flex';
+          console.log('✅ Panel already exists, showing it');
+          return;
+        }
+        
         createPanel();
         chrome.storage.local.set({ panelOpen: true });
+        console.log('✅ Panel auto-opened on Snapchat page');
       } else {
-        setTimeout(tryCreatePanel, 100);
+        setTimeout(tryCreatePanel, 200);
       }
-    };
-    
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(tryCreatePanel, 500);
-      });
-    } else {
-      setTimeout(tryCreatePanel, 500);
+    } catch (e) {
+      console.error('Error auto-opening panel:', e);
     }
+  };
+  
+  // Try multiple times to ensure it opens
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(tryCreatePanel, 500);
+      setTimeout(tryCreatePanel, 1500); // Backup attempt
+      setTimeout(tryCreatePanel, 3000); // Another backup
+    });
+  } else {
+    setTimeout(tryCreatePanel, 500);
+    setTimeout(tryCreatePanel, 1500); // Backup attempt
+    setTimeout(tryCreatePanel, 3000); // Another backup
   }
-});
+})();
 
