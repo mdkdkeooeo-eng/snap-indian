@@ -63,71 +63,73 @@ function allowUserInteraction() {
 
 // Create and inject panel
 function createPanel() {
-  // Check if already exists
-  const existing = document.getElementById('snapchat-filter-panel');
-  if (existing) {
-    existing.style.display = 'flex';
-    panelContainer = existing;
-    panelIframe = existing.querySelector('iframe');
-    return;
-  }
-  
-  if (panelContainer) {
-    panelContainer.style.display = 'flex';
-    return;
-  }
-  
-  // Create container
-  panelContainer = document.createElement('div');
-  panelContainer.id = 'snapchat-filter-panel';
-  panelContainer.style.cssText = `
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 380px;
-    height: 100vh;
-    background: #1a1a1a;
-    z-index: 999999;
-    box-shadow: -2px 0 10px rgba(0,0,0,0.5);
-    display: flex;
-    flex-direction: column;
-  `;
-  
-  // Create iframe for panel
-  panelIframe = document.createElement('iframe');
-  panelIframe.src = chrome.runtime.getURL('panel.html');
-  panelIframe.style.cssText = `
-    width: 100%;
-    height: 100%;
-    border: none;
-    background: #1a1a1a;
-  `;
-  
-  panelContainer.appendChild(panelIframe);
-  
-  // Wait for body to be ready and append
-  const appendPanel = () => {
-    if (document.body) {
-      // Remove existing if any
-      const existing = document.getElementById('snapchat-filter-panel');
-      if (existing && existing !== panelContainer) {
-        existing.remove();
-      }
+  try {
+    // Check if already exists
+    const existing = document.getElementById('snapchat-filter-panel');
+    if (existing) {
+      existing.style.display = 'flex';
+      panelContainer = existing;
+      panelIframe = existing.querySelector('iframe');
+      return;
+    }
+    
+    if (panelContainer && document.body && document.body.contains(panelContainer)) {
+      panelContainer.style.display = 'flex';
+      return;
+    }
+    
+    // Make sure body exists and page is ready
+    if (!document.body) {
+      console.warn('Cannot create panel: document.body not ready');
+      return;
+    }
+    
+    // Create container
+    panelContainer = document.createElement('div');
+    panelContainer.id = 'snapchat-filter-panel';
+    panelContainer.style.cssText = `
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 380px;
+      height: 100vh;
+      background: #1a1a1a;
+      z-index: 999999;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+    `;
+    
+    // Create iframe for panel
+    panelIframe = document.createElement('iframe');
+    panelIframe.src = chrome.runtime.getURL('panel.html');
+    panelIframe.style.cssText = `
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #1a1a1a;
+    `;
+    
+    // Handle iframe errors gracefully
+    panelIframe.onerror = (e) => {
+      console.error('Panel iframe error:', e);
+    };
+    
+    panelContainer.appendChild(panelIframe);
+    
+    // Remove existing if any (different instance)
+    const existingPanel = document.getElementById('snapchat-filter-panel');
+    if (existingPanel && existingPanel !== panelContainer) {
+      existingPanel.remove();
+    }
+    
+    // Append to body
+    if (document.body && !document.body.contains(panelContainer)) {
       document.body.appendChild(panelContainer);
-      console.log('Panel created and added to page');
-    } else {
-      setTimeout(appendPanel, 100);
+      console.log('✅ Panel created and added to page');
     }
-  };
-  
-  if (document.body) {
-    appendPanel();
-  } else {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', appendPanel);
-    } else {
-      setTimeout(appendPanel, 100);
-    }
+  } catch (e) {
+    console.error('Error creating panel:', e);
   }
 }
 
@@ -1434,14 +1436,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Auto-open panel when page loads (if on Snapchat)
 // Always open panel by default when Snapchat loads
+// Use requestIdleCallback or setTimeout to not block page load
 (function autoOpenPanel() {
+  'use strict';
+  
+  // Don't run if not on Snapchat
   if (!verifySnapchatWeb()) {
     return;
   }
   
+  // Wait for page to fully load before trying to create panel
   const tryCreatePanel = () => {
     try {
-      if (document.body) {
+      // Only create panel if page is fully loaded
+      if (document.readyState === 'complete' && document.body) {
         // Check if panel already exists
         const existing = document.getElementById('snapchat-filter-panel');
         if (existing) {
@@ -1450,30 +1458,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
         
-        createPanel();
-        chrome.storage.local.set({ panelOpen: true }, () => {
-          // Storage callback - ignore errors
-        });
-        console.log('✅ Panel auto-opened on Snapchat page');
+        // Create panel asynchronously
+        setTimeout(() => {
+          try {
+            createPanel();
+            chrome.storage.local.set({ panelOpen: true }, () => {
+              console.log('✅ Panel auto-opened on Snapchat page');
+            });
+          } catch (e) {
+            console.error('Error creating panel:', e);
+          }
+        }, 100);
       } else {
-        setTimeout(tryCreatePanel, 200);
+        // Page not ready yet, try again
+        setTimeout(tryCreatePanel, 500);
       }
     } catch (e) {
-      console.error('Error auto-opening panel:', e);
+      console.error('Error in tryCreatePanel:', e);
     }
   };
   
-  // Try multiple times to ensure it opens
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(tryCreatePanel, 500);
-      setTimeout(tryCreatePanel, 1500); // Backup attempt
-      setTimeout(tryCreatePanel, 3000); // Another backup
-    });
+  // Wait for page to be fully loaded
+  if (document.readyState === 'complete') {
+    // Page already loaded, wait a bit then create panel
+    setTimeout(tryCreatePanel, 2000);
   } else {
-    setTimeout(tryCreatePanel, 500);
-    setTimeout(tryCreatePanel, 1500); // Backup attempt
-    setTimeout(tryCreatePanel, 3000); // Another backup
+    // Wait for page to load
+    window.addEventListener('load', () => {
+      setTimeout(tryCreatePanel, 2000);
+    });
+    
+    // Backup: also try after DOMContentLoaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(tryCreatePanel, 3000);
+      });
+    }
   }
 })();
 
