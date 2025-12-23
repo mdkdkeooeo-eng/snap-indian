@@ -215,13 +215,21 @@
     </div>
     <div class="row">
       <div class="field">
+        <label>Min Per Session</label>
+        <input type="number" id="minSession" value="5" min="0" step="1">
+        <div class="help">Target minimum</div>
+      </div>
+      <div class="field">
         <label>Max Per Session</label>
         <input type="number" id="maxSession" value="30" min="0" step="5">
       </div>
+    </div>
+    <div class="row">
       <div class="field">
         <label>Session Break (mins)</label>
         <input type="number" id="sessionBreakMins" value="30" min="0" step="5">
       </div>
+      <div class="field"></div>
     </div>
     
     <h2>Delays (ms)</h2>
@@ -268,6 +276,13 @@
       <button class="btn-secondary btn-small" id="findBtn" style="flex:1;">Find Buttons</button>
       <button class="btn-secondary btn-small" id="resetBtn" style="flex:1;">Reset</button>
     </div>
+    
+    <div class="row" style="margin-top: 8px;">
+      <button class="btn-secondary btn-small" id="exportBtn" style="flex:1; background:#4CAF50;">💾 Export</button>
+      <button class="btn-secondary btn-small" id="importBtn" style="flex:1; background:#2196F3;">📂 Import</button>
+      <button class="btn-secondary btn-small" id="logsBtn" style="flex:1; background:#FF9800;">📋 Logs</button>
+    </div>
+    <input type="file" id="importFile" accept=".json" style="display:none;">
     
     <button class="btn-secondary" id="recordBtn" style="margin-top: 8px; background: #673AB7;">🔴 Record Actions</button>
     <div class="help" style="margin-top:4px;">Click to start recording your clicks. Click again to stop and copy log.</div>

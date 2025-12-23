@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       maxScrolls: 50,
       maxDaily: 100,
       maxHourly: 20,
+      minSession: 5,
       maxSession: 30,
       sessionBreakMins: 30,
       filterNonAmerican: true,
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('maxScrolls').value = s.maxScrolls;
     document.getElementById('maxDaily').value = s.maxDaily;
     document.getElementById('maxHourly').value = s.maxHourly;
+    document.getElementById('minSession').value = s.minSession;
     document.getElementById('maxSession').value = s.maxSession;
     document.getElementById('sessionBreakMins').value = s.sessionBreakMins;
     document.getElementById('filterNonAmerican').checked = s.filterNonAmerican;
@@ -87,6 +89,7 @@ function saveSettings() {
     maxScrolls: parseInt(document.getElementById('maxScrolls').value) || 50,
     maxDaily: parseInt(document.getElementById('maxDaily').value) || 0,
     maxHourly: parseInt(document.getElementById('maxHourly').value) || 0,
+    minSession: parseInt(document.getElementById('minSession').value) || 0,
     maxSession: parseInt(document.getElementById('maxSession').value) || 0,
     sessionBreakMins: parseInt(document.getElementById('sessionBreakMins').value) || 0,
     filterNonAmerican: document.getElementById('filterNonAmerican').checked,
@@ -206,6 +209,119 @@ document.getElementById('closeBtn').addEventListener('click', async () => {
   try {
     await sendMessage('closePanel');
   } catch (e) {}
+});
+
+// Export settings to JSON file
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  try {
+    const settings = await chrome.storage.sync.get();
+    const stats = await chrome.storage.local.get();
+    const logs = await chrome.storage.local.get('sessionLogs');
+    
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      settings: settings,
+      stats: {
+        acceptedToday: stats.acceptedToday || 0,
+        acceptedThisHour: stats.acceptedThisHour || 0,
+        totalAccepted: stats.totalAccepted || 0,
+        totalDeclined: stats.totalDeclined || 0
+      },
+      sessionLogs: logs.sessionLogs || []
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'snapfilter-settings-' + new Date().toISOString().split('T')[0] + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    updateStatus('stopped', 'Settings exported!');
+  } catch (e) {
+    updateStatus('error', 'Export failed: ' + e.message);
+  }
+});
+
+// Import settings from JSON file
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    
+    if (data.settings) {
+      await chrome.storage.sync.set(data.settings);
+      
+      // Update UI with imported settings
+      if (data.settings.minDelay) document.getElementById('minDelay').value = data.settings.minDelay;
+      if (data.settings.maxDelay) document.getElementById('maxDelay').value = data.settings.maxDelay;
+      if (data.settings.scrollDelay) document.getElementById('scrollDelay').value = data.settings.scrollDelay;
+      if (data.settings.maxScrolls) document.getElementById('maxScrolls').value = data.settings.maxScrolls;
+      if (data.settings.maxDaily) document.getElementById('maxDaily').value = data.settings.maxDaily;
+      if (data.settings.maxHourly) document.getElementById('maxHourly').value = data.settings.maxHourly;
+      if (data.settings.minSession) document.getElementById('minSession').value = data.settings.minSession;
+      if (data.settings.maxSession) document.getElementById('maxSession').value = data.settings.maxSession;
+      if (data.settings.sessionBreakMins) document.getElementById('sessionBreakMins').value = data.settings.sessionBreakMins;
+      if (data.settings.filterNonAmerican !== undefined) document.getElementById('filterNonAmerican').checked = data.settings.filterNonAmerican;
+      if (data.settings.filterBrownEmoji !== undefined) document.getElementById('filterBrownEmoji').checked = data.settings.filterBrownEmoji;
+      if (data.settings.humanLikeMouse !== undefined) document.getElementById('humanLikeMouse').checked = data.settings.humanLikeMouse;
+    }
+    
+    if (data.sessionLogs) {
+      await chrome.storage.local.set({ sessionLogs: data.sessionLogs });
+    }
+    
+    updateStatus('stopped', 'Settings imported!');
+  } catch (e) {
+    updateStatus('error', 'Import failed: ' + e.message);
+  }
+  
+  e.target.value = ''; // Reset file input
+});
+
+// View session logs
+document.getElementById('logsBtn').addEventListener('click', async () => {
+  try {
+    const data = await chrome.storage.local.get('sessionLogs');
+    const logs = data.sessionLogs || [];
+    
+    if (logs.length === 0) {
+      updateStatus('stopped', 'No logs yet');
+      return;
+    }
+    
+    let logText = '=== SESSION LOGS ===\n\n';
+    logs.forEach((log, i) => {
+      logText += `--- Session ${i + 1} ---\n`;
+      logText += `Date: ${log.date}\n`;
+      logText += `Accepted: ${log.accepted}\n`;
+      logText += `Declined: ${log.declined}\n`;
+      logText += `Skipped: ${log.skipped}\n`;
+      if (log.names && log.names.length > 0) {
+        logText += `Names: ${log.names.join(', ')}\n`;
+      }
+      logText += '\n';
+    });
+    
+    console.log(logText);
+    
+    try {
+      await navigator.clipboard.writeText(logText);
+      updateStatus('stopped', 'Logs copied to clipboard! (' + logs.length + ' sessions)');
+    } catch (e) {
+      updateStatus('stopped', 'Check console (F12) for logs');
+    }
+  } catch (e) {
+    updateStatus('error', e.message);
+  }
 });
 
 // Record Actions button

@@ -359,12 +359,29 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     const textNoSymbols = combined.replace(/[^a-z\s]/g, '');
     const words = textNoSymbols.split(/\s+/).filter(w => w.length > 0);
     
+    // Check for non-ASCII characters first (foreign scripts like 핿핾, Arabic, etc.)
+    if (/[^\x00-\x7F]/.test(name + user)) {
+      console.log('  → Contains non-ASCII characters');
+      return true;
+    }
+    
     // Check each word separately against full names
     for (const word of words) {
       for (const n of middleEasternNames) {
-        // Full name must be contained in the word OR word equals the name
-        if (word === n || (n.length >= 4 && word.includes(n))) {
-          console.log('  → Matched name:', n, 'in word:', word);
+        // Exact match - word equals the name
+        if (word === n) {
+          console.log('  → Exact name match:', n);
+          return true;
+        }
+        // Embedded match - only for longer names (6+ chars) to avoid false positives
+        // like "eren" in "conference"
+        if (n.length >= 6 && word.includes(n)) {
+          console.log('  → Embedded name match:', n, 'in', word);
+          return true;
+        }
+        // For 4-5 char names, only match at START of word
+        if (n.length >= 4 && n.length < 6 && word.startsWith(n)) {
+          console.log('  → Name at word start:', n, 'in', word);
           return true;
         }
       }
@@ -373,18 +390,12 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     // Check root patterns - must be at START of a word (not middle)
     for (const word of words) {
       for (const root of nameRoots) {
-        // Root must be at the beginning of the word
-        if (word.startsWith(root) && word.length >= root.length + 1) {
+        // Root must be at the beginning of the word AND word must be longer
+        if (word.startsWith(root) && word.length >= root.length + 2) {
           console.log('  → Matched root:', root, 'at start of:', word);
           return true;
         }
       }
-    }
-    
-    // Check for non-ASCII characters (foreign scripts like 핿핾, Arabic, etc.)
-    if (/[^\x00-\x7F]/.test(name + user)) {
-      console.log('  → Contains non-ASCII characters');
-      return true;
     }
     
     return false;
@@ -410,10 +421,34 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   }
 
   async function click(el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    await delay(randDelay(100, 300));
-    el.click();
-    await delay(randDelay(100, 200));
+    if (!el) {
+      console.log('  ⚠ Click called with null element');
+      return false;
+    }
+    
+    try {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await delay(randDelay(100, 300));
+      
+      // Try native click first
+      if (typeof el.click === 'function') {
+        el.click();
+      } else {
+        // For SVG elements, dispatch a click event
+        const event = new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        el.dispatchEvent(event);
+      }
+      
+      await delay(randDelay(100, 200));
+      return true;
+    } catch (e) {
+      console.log('  ⚠ Click error:', e.message);
+      return false;
+    }
   }
 
   function createPanel() {
@@ -662,46 +697,56 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       // DECLINE FLOW:
       // 1. Find and click the X button (SVG in DIV.sGsBQ)
       // 2. Wait for and click the "Ignore" confirmation button
+      // If anything fails, just skip and move on
       
-      let declined = false;
-      
-      // Find the X button (pass full entry so we can use acceptBtn)
-      const xBtn = findXButton(entry);
-      
-      if (xBtn) {
-        console.log('  Clicking X button to open decline dialog...');
-        await click(xBtn);
-        await delay(600);
+      try {
+        let declined = false;
         
-        // Now click the Ignore confirmation button
-        declined = await confirmIgnore();
-      } else {
-        console.log('  X button not found, trying alternative methods...');
+        // Find the X button (pass full entry so we can use acceptBtn)
+        const xBtn = findXButton(entry);
         
-        // Alternative: hover to reveal X button
-        entry.container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-        await delay(400);
-        
-        const xBtnAfterHover = findXButton(entry);
-        if (xBtnAfterHover) {
-          console.log('  Found X button after hover');
-          await click(xBtnAfterHover);
-          await delay(600);
-          declined = await confirmIgnore();
+        if (xBtn) {
+          console.log('  Clicking X button to open decline dialog...');
+          const clicked = await click(xBtn);
+          
+          if (clicked) {
+            await delay(600);
+            // Now click the Ignore confirmation button
+            declined = await confirmIgnore();
+          }
         }
-      }
-      
-      if (declined) {
-        await incrementDeclineCount();
-        console.log('  ✓ DECLINED:', reason, '-', name, username ? '@' + username : '');
-        return { action: 'declined', reason };
-      } else {
-        console.log('  ⚠ Could not decline - skipping (NOT accepting)');
-        if (!declineButtonMissing) {
-          declineButtonMissing = true;
-          updateStatus('Decline button missing - some skipped', 'warning');
+        
+        // If first attempt failed, try hover method
+        if (!declined) {
+          console.log('  Trying hover method...');
+          entry.container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+          await delay(400);
+          
+          const xBtnAfterHover = findXButton(entry);
+          if (xBtnAfterHover) {
+            const clicked = await click(xBtnAfterHover);
+            if (clicked) {
+              await delay(600);
+              declined = await confirmIgnore();
+            }
+          }
         }
-        return { action: 'skip', reason: 'no decline button found' };
+        
+        if (declined) {
+          await incrementDeclineCount();
+          console.log('  ✓ DECLINED:', reason, '-', name, username ? '@' + username : '');
+          return { action: 'declined', reason };
+        } else {
+          console.log('  ⚠ Could not decline - skipping');
+          if (!declineButtonMissing) {
+            declineButtonMissing = true;
+            updateStatus('Some declines skipped', 'warning');
+          }
+          return { action: 'skip', reason: 'decline failed' };
+        }
+      } catch (e) {
+        console.log('  ⚠ Error during decline, skipping:', e.message);
+        return { action: 'skip', reason: 'error: ' + e.message };
       }
       
     } else {
@@ -899,6 +944,26 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     }
     
     await saveSessionEnd();
+    
+    // Save session log
+    try {
+      const logsData = await chrome.storage.local.get('sessionLogs');
+      const logs = logsData.sessionLogs || [];
+      logs.push({
+        date: new Date().toISOString(),
+        accepted: accepted,
+        declined: declined,
+        skipped: skipped,
+        sessionAccepted: acceptedThisSession,
+        hourlyTotal: acceptedThisHour,
+        dailyTotal: acceptedToday
+      });
+      // Keep only last 100 sessions
+      if (logs.length > 100) logs.shift();
+      await chrome.storage.local.set({ sessionLogs: logs });
+    } catch (e) {
+      console.log('Failed to save session log:', e);
+    }
     
     const msg = 'Done! Accepted: ' + accepted + ', Declined: ' + declined + ', Skipped: ' + skipped;
     console.log(msg);
