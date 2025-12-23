@@ -1375,23 +1375,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return true;
   } else if (message.action === 'openPanel') {
-    createPanel();
-    chrome.storage.local.set({ panelOpen: true });
-    sendResponse({ success: true });
+    try {
+      createPanel();
+      chrome.storage.local.set({ panelOpen: true }, () => {
+        // Storage callback - ignore errors
+      });
+      sendResponse({ success: true });
+    } catch (e) {
+      console.error('Error opening panel:', e);
+      sendResponse({ success: false, error: e.message });
+    }
     return true;
   } else if (message.action === 'closePanel') {
-    removePanel();
-    chrome.storage.local.set({ panelOpen: false });
-    sendResponse({ success: true });
+    try {
+      removePanel();
+      chrome.storage.local.set({ panelOpen: false }, () => {
+        // Storage callback - ignore errors
+      });
+      sendResponse({ success: true });
+    } catch (e) {
+      console.error('Error closing panel:', e);
+      sendResponse({ success: false, error: e.message });
+    }
     return true;
   } else if (message.action === 'togglePanel') {
-    if (panelContainer && panelContainer.style.display !== 'none') {
-      removePanel();
-      sendResponse({ success: true, visible: false });
-    } else {
-      createPanel();
-      chrome.storage.local.set({ panelOpen: true });
-      sendResponse({ success: true, visible: true });
+    try {
+      if (panelContainer && panelContainer.style.display !== 'none') {
+        removePanel();
+        chrome.storage.local.set({ panelOpen: false }, () => {});
+        sendResponse({ success: true, visible: false });
+      } else {
+        createPanel();
+        chrome.storage.local.set({ panelOpen: true }, () => {});
+        sendResponse({ success: true, visible: true });
+      }
+    } catch (e) {
+      console.error('Error toggling panel:', e);
+      sendResponse({ success: false, error: e.message });
     }
     return true;
   }
@@ -1431,7 +1451,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         
         createPanel();
-        chrome.storage.local.set({ panelOpen: true });
+        chrome.storage.local.set({ panelOpen: true }, () => {
+          // Storage callback - ignore errors
+        });
         console.log('✅ Panel auto-opened on Snapchat page');
       } else {
         setTimeout(tryCreatePanel, 200);
