@@ -269,13 +269,13 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   // These catch variations like mohamad, mohmad, muhamed, mohmandolo, etc.
   const nameRoots = [
     'mohm', 'moha', 'muha', 'muhm', 'mahm', 'mohd',  // mohammad variants
-    'ahme', 'ahmd', 'ahm',  // ahmed variants
+    'ahme', 'ahmd',  // ahmed variants
     'hass', 'huss', 'husn',  // hassan/hussein
     'ibra', 'abdu', 'abd',  // ibrahim/abdullah
     'khal', 'khld',  // khalid/khalil
     'must', 'mstf',  // mustafa
     'osma', 'usmn',  // osman/usman
-    'isma', 'ism',  // ismail
+    'isma',  // ismail
     'yusf', 'yous', 'yose',  // yusuf/yousef
     'tarq', 'tariq',  // tariq
     'hamz', 'hmza',  // hamza
@@ -283,25 +283,48 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     'rash', 'rshd',  // rashid
     'fais', 'fysl',  // faisal
     'nass', 'nasr',  // nasser/nasir
-    'qasi', 'qsm',  // qasim
-    'shah', 'shaz',  // shahid/shahzad
-    'waqr', 'wqs',  // waqar/waqas
-    'rizw', 'rzwn',  // rizwan
-    'jave', 'jwd',  // javed/jawad
-    'imra', 'imrn',  // imran
-    'nabi', 'ndm',  // nabeel/nadeem
-    'iqba', 'iqbl',  // iqbal
-    'zubr', 'zbr',  // zubair
-    'rami', 'rukh',  // ramita/rukhsar
-    'noor', 'nur',  // noor/nur
-    'sami', 'smr',  // samir
-    'dani', 'dnyl',  // daniyal
-    'ayan', 'arya', 'ayaa',  // ayan/aryan
-    'zara', 'sara',  // zara (if male context)
+    'qasi',  // qasim
+    'shahi', 'shahz',  // shahid/shahzad
+    'waqr', 'waqa',  // waqar/waqas
+    'rizw',  // rizwan
+    'jave', 'jawa',  // javed/jawad
+    'imra',  // imran
+    'nabi', 'nade',  // nabeel/nadeem
+    'iqba',  // iqbal
+    'zuba',  // zubair
+    'rukh',  // rukhsar
+    'noor',  // noor/nur
+    'sami',  // samir
+    'dani', 'dany',  // daniyal
+    'arya', 'ayaa',  // aryan
     'asad', 'asif', 'atif',  // asad/asif/atif
-    'faiz', 'fayz',  // faiz
+    'faiz',  // faiz
     'haid', 'hayd',  // haider
-    'uzai', 'uzma',  // uzair
+    'uzai',  // uzair
+    
+    // Sikh/Punjabi PREFIXES (very common patterns)
+    'gurp', 'gurd', 'gurj', 'gurm', 'gurs',  // Gur- names
+    'harp', 'hard', 'harj', 'harm', 'hars',  // Har- names
+    'manp', 'mand', 'manj', 'manm',  // Man- names
+    'navp', 'navd', 'navj', 'navm',  // Nav- names
+    'balj', 'balv', 'bald', 'balp',  // Bal- names
+    'jasv', 'jasp', 'jasd', 'jasj',  // Jas- names
+    'rajv', 'rajp', 'rajd', 'rajj',  // Raj- names
+    'sukh', 'sukhd', 'sukhj', 'sukhv',  // Sukh- names
+    'ravj', 'ravi', 'ravd', 'ravm',  // Rav- names (RAVJOT!)
+    'davj', 'davi', 'davd',  // Dav- names
+    'jatj', 'jati', 'jatd',  // Jat- names
+    'surj', 'suri', 'surd',  // Sur- names
+    'kulj', 'kuld', 'kulp',  // Kul- names
+    'amar', 'amard', 'amarj',  // Amar- names
+    'parm', 'parj', 'pard',  // Par- names
+    'jagj', 'jagd', 'jagp',  // Jag- names
+    'rand', 'ranj', 'ranv',  // Ran- names
+    'indj', 'indd', 'indp',  // Ind- names (Inderjit, etc)
+    
+    // Sikh/Punjabi SUFFIXES that form names
+    'deep', 'preet', 'jeet', 'meet', 'veer', 'inder', 'inder',
+    
     // Turkish roots
     'mehm', 'mehmet',  // mehmet
     'ahmet', 'mustaf',  // ahmet/mustafa
@@ -309,14 +332,15 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     'berk', 'kaan',  // berk/kaan
     'emir', 'emre',  // emir/emre
     'burak', 'bura',  // burak
-    'oguz', 'oğuz',  // oguz
+    'oguz',  // oguz
     'serkan', 'serk',  // serkan
     'volkan', 'volk',  // volkan
-    'gokh', 'gökh',  // gokhan
-    'ozgu', 'özgü',  // ozgur
-    'tugr', 'tuğr',  // tugrul
-    'yilm', 'yılm',  // yilmaz
-    'demi', 'demir',  // demir
+    'gokh',  // gokhan
+    'ozgu',  // ozgur
+    'tugr',  // tugrul
+    'yilm',  // yilmaz
+    'demir',  // demir
+    
     // Mexican/Hispanic roots
     'guad', 'guadal',  // guadalupe
     'javi', 'javie',  // javier
@@ -327,13 +351,13 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     'enri', 'enriq',  // enrique
     'gonz', 'gonzal',  // gonzalez/gonzalo
     'hern', 'hernan',  // hernandez/hernando
-    'carl', 'carlo',  // carlos
+    'carlo',  // carlos
     'migu', 'migue',  // miguel
     'edua', 'eduar',  // eduardo
-    'anto', 'anton',  // antonio
+    'anton',  // antonio
     'salv', 'salva',  // salvador
-    'fran', 'franc',  // francisco
-    'rami', 'ramir',  // ramirez/ramiro
+    'franc',  // francisco
+    'ramir',  // ramirez/ramiro
     'rodri', 'rodrig',  // rodrigo/rodriguez
   ];
   
@@ -342,7 +366,20 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     // Middle Eastern / Arabic
     'ahmed','mohammed','muhammad','mohamed','mohammad','mohamad','muhamed','ali','hassan','hussain','hussein','omar','yusuf','yousef','ibrahim','abdullah','abdul','khalid','saad','tariq','zain','zayn','hamza','bilal','mustafa','osman','usman','ismail','salman','karim','jamal','rashid','faisal','nasser','mahmoud','majid','noor','reza','saeed','samir','waleed','yazan','zaid','adnan','amir','farid','hadi','hani','jamil','kareem','malik','nasir','qasim','sadiq','shahid','tahir','zahir','zaki','amin','arif','aziz','bashir','emad','fahad','ghazi','habib','imran','javed','jawad','khalil','latif','nabeel','nadeem','naveed','nazir','rafiq','rizwan','sabir','sajid','saleem','samad','shafiq','shahzad','shakir','sharif','taha','waqar','waqas','waseem','yasir','zafar','zahid','zubair','khan','sheikh','syed','iqbal','mirza','ramita','rukhsar',
     // South Asian / Indian
-    'preet','singh','raj','kumar','patel','gupta','sharma','ankit','rohit','vikram','suresh','dinesh','rakesh','daniyal','danyal','danya','ayan','aryan','ayaan','rehan','rohan','sohan','mohan','karan','arjun','varun','tarun','nikhil','rahul','sahil','vishal','kapil','sunil','anil','ravi','sanjay','vijay','ajay','manoj','deepak','ashok','vinod','pramod','naresh','ganesh','umesh','mukesh','lokesh','yogesh','jitesh','hitesh','ritesh','manish','danish','tanish','harish','girish','satish','nitish','pritesh','paresh','jayesh','brijesh','alpesh','chirag','nirav','maulik','ketan','chetan','hiren','jignesh','bhavesh','darshan','kishan','ishan','roshan','shan','farhan','burhan','imtiaz','mumtaz','nawaz','shabaz','faraz','niaz','liaqat','shaukat','barkat','rifat','aftab','mehtab','sohail','wajid','junaid','obaid','ubaid','humaid','saif','naif','hanif','sharif','siddiq','farooq','masood','mehmood','dawood','suleman','hafeez','azeez','muneeb','haseeb','munir','zaheer','sameer','tanveer','pervez','parveen','yasmeen','shireen','tasleem','hakeem','rahim','faheem','naeem','kaleem','haleem','akram','ikram','ashraf','musharaf','anwar','sarwar','dilwar','gulzar','sarfraz','shahbaz','riaz','ijaz','fayyaz','noman','othman','affan','irfan','kamran','adeel','aqeel','shakeel','jameel','sumeet','puneet','navneet','gurpreet','harpreet','manpreet','kuldeep','sandeep','pradeep','sukhdeep','jagdeep','randeep','amardeep','kuljit','gurjit','baljit','surjit','daljit','manjit','jagjit','ranjit','paramjit','sukhvir','balvir','rajvir','jasvir','dalvir','inderjit','avtar',
+    'preet','singh','raj','kumar','patel','gupta','sharma','ankit','rohit','vikram','suresh','dinesh','rakesh','daniyal','danyal','danya','ayan','aryan','ayaan','rehan','rohan','sohan','mohan','karan','arjun','varun','tarun','nikhil','rahul','sahil','vishal','kapil','sunil','anil','ravi','sanjay','vijay','ajay','manoj','deepak','ashok','vinod','pramod','naresh','ganesh','umesh','mukesh','lokesh','yogesh','jitesh','hitesh','ritesh','manish','danish','tanish','harish','girish','satish','nitish','pritesh','paresh','jayesh','brijesh','alpesh','chirag','nirav','maulik','ketan','chetan','hiren','jignesh','bhavesh','darshan','kishan','ishan','roshan','shan','farhan','burhan','imtiaz','mumtaz','nawaz','shabaz','faraz','niaz','liaqat','shaukat','barkat','rifat','aftab','mehtab','sohail','wajid','junaid','obaid','ubaid','humaid','saif','naif','hanif','sharif','siddiq','farooq','masood','mehmood','dawood','suleman','hafeez','azeez','muneeb','haseeb','munir','zaheer','sameer','tanveer','pervez','parveen','yasmeen','shireen','tasleem','hakeem','rahim','faheem','naeem','kaleem','haleem','akram','ikram','ashraf','musharaf','anwar','sarwar','dilwar','gulzar','sarfraz','shahbaz','riaz','ijaz','fayyaz','noman','othman','affan','irfan','kamran','adeel','aqeel','shakeel','jameel','sumeet','puneet','navneet',
+    // Sikh/Punjabi names (comprehensive)
+    'gurpreet','harpreet','manpreet','navpreet','kulpreet','sukpreet','balpreet','jaspreet','rajpreet','davpreet','amritpreet',
+    'gurdeep','hardeep','mandeep','navdeep','kuldeep','sukhdeep','baldeep','jasdeep','rajdeep','davdeep','amritdeep','sandeep','pradeep','jagdeep','randeep','amardeep',
+    'gurjot','harjot','manjot','navjot','kuljot','sukhjot','baljot','jasjot','rajjot','davjot','ravjot','amritjot',  // RAVJOT here!
+    'gurjit','harjit','manjit','navjit','kuljit','sukhjit','baljit','jasjit','rajjit','davjit','ravjit','amritjit','surjit','daljit','jagjit','ranjit','paramjit','inderjit',
+    'gurmeet','harmeet','manmeet','navmeet','kulmeet','sukhmeet','balmeet','jasmeet','rajmeet','davmeet','ravmeet','amritmeet',
+    'gurvir','harvir','manvir','navvir','kulvir','sukhvir','balvir','jasvir','rajvir','davvir','ravvir',
+    'gurinder','harinder','maninder','navinder','kulinder','sukhinder','balinder','jasinder','rajinder','davinder','ravinder','jatinder','surinder',
+    'gurpal','harpal','manpal','navpal','kulpal','sukhpal','balpal','jaspal','rajpal','davpal','ravpal','kirpal','gopal',
+    'gurmit','harmit','manmit','navmit','kulmit','sukhmit','balmit','jasmit','rajmit','davmit','ravmit',
+    'amandeep','amanpreet','amanjot','amanvir','simran','simrat','simranjit','simranpreet',
+    'tejinder','tejpreet','tejvir','tejpal',
+    'avtar','avtarjit','avtarpreet',
     // Turkish names
     'mehmet','ahmet','mustafa','kemal','erdogan','yilmaz','ozturk','kaya','demir','celik','sahin','yildiz','aydin','ozdemir','arslan','dogan','kilic','aslan','cetin','koc','kurt','ozcan','polat','simsek','yildirim','gunes','aktas','korkmaz','kaplan','tekin','bulut','karaca','tas','keskin','bayrak','bozkurt','unal','turan','erdem','cengiz','cenk','berk','kaan','emir','emre','burak','oguz','serkan','volkan','gokhan','ozgur','tugrul','onur','murat','kerem','cem','selim','tolga','baris','arda','omer','yusuf','eren','alp','efe','koray','deniz','umut','hakan','serdar','tuncay','cihan','ilhan','orhan','ferhat','recep','tayyip','suleyman','ismet','nihat','tamer','levent','ercan','ozan','taylan','sinan','evren','erhan','gorkem','furkan','batuhan','emirhan','berkay','kubilay','ilker','doruk','bora','aras','poyraz','utku','tarkan','teoman','sertab','tariq',
     // Mexican / Hispanic names
