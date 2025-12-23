@@ -105,15 +105,29 @@ function createPanel() {
   
   panelContainer.appendChild(panelIframe);
   
-  // Wait for body to be ready
-  if (document.body) {
-    document.body.appendChild(panelContainer);
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      if (document.body) {
-        document.body.appendChild(panelContainer);
+  // Wait for body to be ready and append
+  const appendPanel = () => {
+    if (document.body) {
+      // Remove existing if any
+      const existing = document.getElementById('snapchat-filter-panel');
+      if (existing && existing !== panelContainer) {
+        existing.remove();
       }
-    });
+      document.body.appendChild(panelContainer);
+      console.log('Panel created and added to page');
+    } else {
+      setTimeout(appendPanel, 100);
+    }
+  };
+  
+  if (document.body) {
+    appendPanel();
+  } else {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', appendPanel);
+    } else {
+      setTimeout(appendPanel, 100);
+    }
   }
 }
 

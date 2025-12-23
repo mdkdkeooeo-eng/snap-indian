@@ -1,4 +1,4 @@
-// Load saved settings
+// Load saved settings and auto-open panel
 document.addEventListener('DOMContentLoaded', async () => {
   const settings = await chrome.storage.sync.get({
     minDelay: 800,
@@ -18,45 +18,64 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('filterBrownEmoji').checked = settings.filterBrownEmoji;
   document.getElementById('humanLikeMouse').checked = settings.humanLikeMouse;
   
-  // Auto-open panel when popup opens
+  // Open panel on the page when popup opens
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    if (tabs[0]) {
-      const url = tabs[0].url || '';
+    if (!tabs[0]) {
+      updateStatus('error', 'No active tab');
+      return;
+    }
+    
+    const url = tabs[0].url || '';
+    
+    // Always try to open panel, even if not on Snapchat yet
+    try {
+      // First try to send message
+      const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+      if (response && response.success) {
+        chrome.storage.local.set({ panelOpen: true });
+        if (isSnapchatWeb(url)) {
+          updateStatus('stopped', 'Panel opened! Check the right side of the page.');
+        } else {
+          updateStatus('stopped', 'Panel will open when you go to Snapchat.');
+        }
+      }
+    } catch (e) {
+      // Content script not loaded - inject it
       if (isSnapchatWeb(url)) {
         try {
-          // Try to open panel
-          await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
-          chrome.storage.local.set({ panelOpen: true });
-          updateStatus('stopped', 'Panel opened on page');
-          // Keep popup open for a moment so user sees the message
-          setTimeout(() => {
-            // Don't auto-close - let user close it
-          }, 500);
-        } catch (e) {
-          // Content script not loaded - try to inject it
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId: tabs[0].id },
-              files: ['content.js']
-            });
-            setTimeout(async () => {
-              try {
-                await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+          await chrome.scripting.executeScript({
+            target: { tabId: tabs[0].id },
+            files: ['content.js']
+          });
+          
+          // Wait then try again
+          setTimeout(async () => {
+            try {
+              const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+              if (response && response.success) {
                 chrome.storage.local.set({ panelOpen: true });
-                updateStatus('stopped', 'Panel opened on page');
-              } catch (e2) {
-                updateStatus('error', 'Please refresh the page');
+                updateStatus('stopped', 'Panel opened! Check the right side of the page.');
+              } else {
+                updateStatus('error', 'Could not open panel. Try refreshing the page.');
               }
-            }, 500);
-          } catch (e2) {
+            } catch (e2) {
+              updateStatus('error', 'Please refresh the page and try again');
+            }
+          }, 500);
+        } catch (e2) {
+          if (isSnapchatWeb(url)) {
             updateStatus('error', 'Please refresh the page');
+          } else {
+            updateStatus('stopped', 'Navigate to Snapchat and click the extension icon again');
           }
         }
       } else {
-        updateStatus('error', 'Please navigate to web.snapchat.com');
+        updateStatus('stopped', 'Navigate to web.snapchat.com, then click the extension icon');
       }
-      
-      // Check if script is running
+    }
+    
+    // Check if script is running
+    if (isSnapchatWeb(url)) {
       try {
         const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'getStatus' });
         if (response && response.running) {
@@ -237,19 +256,46 @@ document.getElementById('findBtn').addEventListener('click', async () => {
 // Open Panel button
 document.getElementById('openPanelBtn').addEventListener('click', async () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    if (!tabs[0]) return;
+    if (!tabs[0]) {
+      updateStatus('error', 'No active tab');
+      return;
+    }
     
-    if (!isSnapchatWeb(tabs[0].url || '')) {
+    const url = tabs[0].url || '';
+    if (!isSnapchatWeb(url)) {
       updateStatus('error', 'Please navigate to web.snapchat.com first');
       return;
     }
     
     try {
-      await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
-      updateStatus('stopped', 'Panel opened! It will stay visible on the page.');
-      window.close(); // Close popup since panel is now open
+      const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+      if (response && response.success) {
+        chrome.storage.local.set({ panelOpen: true });
+        updateStatus('stopped', 'Panel opened! Check the right side of the page.');
+      } else {
+        updateStatus('error', 'Could not open panel');
+      }
     } catch (e) {
-      updateStatus('error', 'Please refresh the page and try again');
+      // Try to inject script
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          files: ['content.js']
+        });
+        setTimeout(async () => {
+          try {
+            const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+            if (response && response.success) {
+              chrome.storage.local.set({ panelOpen: true });
+              updateStatus('stopped', 'Panel opened! Check the right side of the page.');
+            }
+          } catch (e2) {
+            updateStatus('error', 'Please refresh the page');
+          }
+        }, 500);
+      } catch (e2) {
+        updateStatus('error', 'Please refresh the page and try again');
+      }
     }
   });
 });
