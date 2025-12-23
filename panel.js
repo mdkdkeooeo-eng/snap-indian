@@ -1,3 +1,6 @@
+// Panel script - stays open on the page
+let panelWindow = null;
+
 // Load saved settings
 document.addEventListener('DOMContentLoaded', async () => {
   const settings = await chrome.storage.sync.get({
@@ -18,15 +21,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('filterBrownEmoji').checked = settings.filterBrownEmoji;
   document.getElementById('humanLikeMouse').checked = settings.humanLikeMouse;
   
-  // Check if script is running and verify URL
+  // Check if script is running
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     if (tabs[0]) {
-      const url = tabs[0].url || '';
-      if (!isSnapchatWeb(url)) {
-        updateStatus('error', 'Please navigate to web.snapchat.com');
-        return;
-      }
-      
       try {
         const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'getStatus' });
         if (response && response.running) {
@@ -35,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           document.getElementById('stopBtn').disabled = false;
         }
       } catch (e) {
-        // Content script not loaded yet - that's okay
+        // Content script not loaded yet
         updateStatus('stopped', 'Ready - Click Start to begin');
       }
     }
@@ -84,13 +81,11 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     const tab = tabs[0];
     const url = tab.url || '';
     
-    // Check if we're on Snapchat web
     if (!isSnapchatWeb(url)) {
       updateStatus('error', 'Please navigate to web.snapchat.com first');
       return;
     }
     
-    // Try to send message
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         action: 'start',
@@ -104,18 +99,15 @@ document.getElementById('startBtn').addEventListener('click', async () => {
       } else if (response && response.error) {
         updateStatus('error', response.error);
       } else {
-        // Content script might not be loaded, try to inject it
         updateStatus('error', 'Content script not loaded. Try refreshing the page.');
       }
     } catch (error) {
-      // Content script not loaded - try to inject it
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['content.js']
         });
         
-        // Wait a bit then try again
         setTimeout(async () => {
           try {
             const response = await chrome.tabs.sendMessage(tab.id, {
@@ -175,7 +167,7 @@ document.getElementById('debugBtn').addEventListener('click', async () => {
   });
 });
 
-// Find button - logs all buttons for sharing
+// Find button
 document.getElementById('findBtn').addEventListener('click', async () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     if (!tabs[0]) return;
@@ -189,12 +181,11 @@ document.getElementById('findBtn').addEventListener('click', async () => {
       const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'findAllButtons' });
       if (response && response.log) {
         updateStatus('stopped', 'Log generated! Check console (F12) and copy the log');
-        // Also try to copy to clipboard
         try {
           await navigator.clipboard.writeText(response.log);
           updateStatus('stopped', 'Log copied to clipboard! Also check console (F12)');
         } catch (e) {
-          // If clipboard fails, that's okay - user can copy from console
+          // Clipboard failed, that's okay
         }
       } else {
         updateStatus('error', 'Error generating log. Refresh the page and try again.');
@@ -205,27 +196,28 @@ document.getElementById('findBtn').addEventListener('click', async () => {
   });
 });
 
-// Open Panel button
-document.getElementById('openPanelBtn').addEventListener('click', async () => {
-  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    if (!tabs[0]) return;
-    
-    if (!isSnapchatWeb(tabs[0].url || '')) {
-      updateStatus('error', 'Please navigate to web.snapchat.com first');
-      return;
-    }
-    
-    try {
-      await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
-      updateStatus('stopped', 'Panel opened! It will stay visible on the page.');
-      window.close(); // Close popup since panel is now open
-    } catch (e) {
-      updateStatus('error', 'Please refresh the page and try again');
+// Close button
+document.getElementById('closeBtn').addEventListener('click', () => {
+  // Send message to content script to close the panel
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'closePanel' }).catch(() => {});
     }
   });
 });
 
-// Listen for status updates from content script
+// Listen for status updates from content script (via postMessage from iframe parent)
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'statusUpdate') {
+    updateStatus(event.data.status, event.data.message);
+    if (event.data.status === 'stopped') {
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+    }
+  }
+});
+
+// Also listen via chrome.runtime for popup messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'statusUpdate') {
     updateStatus(message.status, message.message);

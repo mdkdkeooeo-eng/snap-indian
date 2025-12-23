@@ -2,6 +2,52 @@
 let isRunning = false;
 let currentSettings = null;
 let processedUsernames = new Set();
+let panelContainer = null;
+let panelIframe = null;
+
+// Create and inject panel
+function createPanel() {
+  if (panelContainer) {
+    panelContainer.style.display = 'flex';
+    return;
+  }
+  
+  // Create container
+  panelContainer = document.createElement('div');
+  panelContainer.id = 'snapchat-filter-panel';
+  panelContainer.style.cssText = `
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 380px;
+    height: 100vh;
+    background: #1a1a1a;
+    z-index: 999999;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+  `;
+  
+  // Create iframe for panel
+  panelIframe = document.createElement('iframe');
+  panelIframe.src = chrome.runtime.getURL('panel.html');
+  panelIframe.style.cssText = `
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #1a1a1a;
+  `;
+  
+  panelContainer.appendChild(panelIframe);
+  document.body.appendChild(panelContainer);
+}
+
+// Remove panel
+function removePanel() {
+  if (panelContainer) {
+    panelContainer.style.display = 'none';
+  }
+}
 
 // Non-American name patterns
 const nonAmericanPatterns = [
@@ -804,20 +850,45 @@ async function processFriendRequests() {
   console.log(`\nProcessing complete! Processed: ${processedCount}, Ignored: ${ignoredCount}`);
   isRunning = false;
   
-  // Notify popup
+  // Notify popup and panel
   chrome.runtime.sendMessage({
     action: 'statusUpdate',
     status: 'stopped',
     message: `Complete! Processed: ${processedCount}, Ignored: ${ignoredCount}`
   });
+  
+  // Also notify panel iframe directly
+  if (panelIframe && panelIframe.contentWindow) {
+    try {
+      panelIframe.contentWindow.postMessage({
+        action: 'statusUpdate',
+        status: 'stopped',
+        message: `Complete! Processed: ${processedCount}, Ignored: ${ignoredCount}`
+      }, '*');
+    } catch (e) {
+      // Cross-origin or iframe not ready
+    }
+  }
+}
+
+// Verify we're on Snapchat web
+function verifySnapchatWeb() {
+  const url = window.location.href;
+  return url.includes('snapchat.com') || url.includes('web.snapchat.com');
 }
 
 // Message listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Always respond to verify the script is loaded
+  if (!verifySnapchatWeb()) {
+    sendResponse({ success: false, error: 'Not on Snapchat web. Current URL: ' + window.location.href });
+    return true;
+  }
+  
   if (message.action === 'start') {
     if (isRunning) {
       sendResponse({ success: false, message: 'Already running' });
-      return;
+      return true;
     }
     
     currentSettings = message.settings;
@@ -826,11 +897,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     processFriendRequests();
     sendResponse({ success: true });
+    return true;
   } else if (message.action === 'stop') {
     isRunning = false;
     sendResponse({ success: true });
+    return true;
   } else if (message.action === 'getStatus') {
     sendResponse({ running: isRunning });
+    return true;
   } else if (message.action === 'debug') {
     debugButtons();
     const entries = findFriendEntries();
@@ -873,6 +947,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     console.log(`\n=== END ENTRIES DEBUG ===\n`);
     sendResponse({ success: true });
+    return true;
   } else if (message.action === 'findAllButtons') {
     try {
       const log = findAllButtonsLog();
@@ -882,8 +957,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Error generating button log:', e);
       sendResponse({ success: false, error: e.message });
     }
+    return true;
+  } else if (message.action === 'openPanel') {
+    createPanel();
+    sendResponse({ success: true });
+    return true;
+  } else if (message.action === 'closePanel') {
+    removePanel();
+    sendResponse({ success: true });
+    return true;
   }
   
-  return true; // Keep channel open for async response
+  // Default response
+  sendResponse({ success: false, error: 'Unknown action' });
+  return true;
 });
 
