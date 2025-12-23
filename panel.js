@@ -208,6 +208,46 @@ document.getElementById('closeBtn').addEventListener('click', async () => {
   } catch (e) {}
 });
 
+// Record Actions button
+let isRecording = false;
+document.getElementById('recordBtn').addEventListener('click', async () => {
+  if (!isRecording) {
+    // Start recording
+    try {
+      const response = await sendMessage('startRecording');
+      if (response && response.success) {
+        isRecording = true;
+        document.getElementById('recordBtn').textContent = '⏹ Stop Recording';
+        document.getElementById('recordBtn').style.background = '#f44336';
+        updateStatus('running', 'Recording clicks... Click elements, then stop to copy log.');
+      }
+    } catch (e) {
+      updateStatus('error', e.message);
+    }
+  } else {
+    // Stop recording and get log
+    try {
+      const response = await sendMessage('stopRecording');
+      isRecording = false;
+      document.getElementById('recordBtn').textContent = '🔴 Record Actions';
+      document.getElementById('recordBtn').style.background = '#673AB7';
+      
+      if (response && response.log) {
+        try {
+          await navigator.clipboard.writeText(response.log);
+          updateStatus('stopped', 'Recorded ' + response.count + ' actions - copied to clipboard!');
+        } catch (e) {
+          updateStatus('stopped', 'Recorded ' + response.count + ' actions - check console (F12)');
+        }
+      } else {
+        updateStatus('stopped', 'No actions recorded');
+      }
+    } catch (e) {
+      updateStatus('error', e.message);
+    }
+  }
+});
+
 // Listen for status updates from content script
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'statusUpdate') {

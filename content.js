@@ -20,6 +20,10 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   let panel = null;
   let declineButtonMissing = false; // Track if we've warned about missing decline button
   
+  // Action recording state
+  let isRecordingActions = false;
+  let recordedActions = [];
+  
   // Rate limiting counters
   let acceptedThisSession = 0;
   let declinedThisSession = 0;
@@ -125,6 +129,142 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     } catch (e) {}
   }
 
+  // === ACTION RECORDING ===
+  
+  function getElementDetails(el) {
+    const rect = el.getBoundingClientRect();
+    const details = {
+      tagName: el.tagName,
+      id: el.id || '',
+      className: (el.className || '').toString().substring(0, 100),
+      textContent: (el.textContent || '').trim().substring(0, 100),
+      ariaLabel: el.getAttribute('aria-label') || '',
+      title: el.getAttribute('title') || '',
+      role: el.getAttribute('role') || '',
+      type: el.getAttribute('type') || '',
+      href: el.getAttribute('href') || '',
+      name: el.getAttribute('name') || '',
+      x: Math.round(rect.left),
+      y: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      visible: el.offsetParent !== null
+    };
+    
+    // Check for SVG
+    const svg = el.querySelector('svg');
+    if (svg) {
+      details.hasSVG = true;
+      details.svgPaths = svg.querySelectorAll('path').length;
+    }
+    
+    // Get parent info
+    if (el.parentElement) {
+      details.parent = {
+        tagName: el.parentElement.tagName,
+        className: (el.parentElement.className || '').toString().substring(0, 50),
+        textPreview: (el.parentElement.textContent || '').trim().substring(0, 50)
+      };
+    }
+    
+    // Get computed styles
+    const styles = window.getComputedStyle(el);
+    details.bgColor = styles.backgroundColor;
+    details.cursor = styles.cursor;
+    
+    return details;
+  }
+  
+  function recordClickHandler(event) {
+    if (!isRecordingActions) return;
+    
+    const el = event.target;
+    const action = {
+      timestamp: new Date().toISOString(),
+      type: 'click',
+      element: getElementDetails(el),
+      clientX: event.clientX,
+      clientY: event.clientY,
+      path: []
+    };
+    
+    // Record the path from clicked element up to body
+    let current = el;
+    for (let i = 0; i < 5 && current && current !== document.body; i++) {
+      action.path.push({
+        tagName: current.tagName,
+        className: (current.className || '').toString().substring(0, 30),
+        id: current.id || ''
+      });
+      current = current.parentElement;
+    }
+    
+    recordedActions.push(action);
+    console.log('📍 Recorded click #' + recordedActions.length + ':', el.tagName, (el.textContent || '').substring(0, 30));
+  }
+  
+  function startRecording() {
+    recordedActions = [];
+    isRecordingActions = true;
+    document.addEventListener('click', recordClickHandler, true);
+    console.log('🔴 Recording started - click elements to record');
+    return true;
+  }
+  
+  function stopRecording() {
+    isRecordingActions = false;
+    document.removeEventListener('click', recordClickHandler, true);
+    
+    // Generate log
+    let log = '=== RECORDED ACTIONS ===\n\n';
+    log += 'Recording stopped at: ' + new Date().toISOString() + '\n';
+    log += 'Total actions: ' + recordedActions.length + '\n';
+    log += 'URL: ' + location.href + '\n\n';
+    
+    recordedActions.forEach((action, i) => {
+      log += '--- Action ' + (i + 1) + ' [' + action.type.toUpperCase() + '] ---\n';
+      log += 'Time: ' + action.timestamp + '\n';
+      log += 'Click position: ' + action.clientX + ', ' + action.clientY + '\n\n';
+      
+      const el = action.element;
+      log += 'Element: <' + el.tagName + '>\n';
+      log += '  ID: "' + el.id + '"\n';
+      log += '  Class: "' + el.className + '"\n';
+      log += '  Text: "' + el.textContent + '"\n';
+      log += '  Aria-Label: "' + el.ariaLabel + '"\n';
+      log += '  Title: "' + el.title + '"\n';
+      log += '  Role: "' + el.role + '"\n';
+      log += '  Position: x=' + el.x + ' y=' + el.y + ' w=' + el.width + ' h=' + el.height + '\n';
+      log += '  Visible: ' + el.visible + '\n';
+      log += '  Cursor: ' + el.cursor + '\n';
+      log += '  Background: ' + el.bgColor + '\n';
+      if (el.hasSVG) {
+        log += '  Has SVG: true (paths: ' + el.svgPaths + ')\n';
+      }
+      
+      if (el.parent) {
+        log += '  Parent: <' + el.parent.tagName + '> class="' + el.parent.className + '"\n';
+        log += '          text: "' + el.parent.textPreview + '"\n';
+      }
+      
+      if (action.path.length > 0) {
+        log += '  DOM Path: ';
+        log += action.path.map(p => p.tagName + (p.id ? '#' + p.id : '') + (p.className ? '.' + p.className.split(' ')[0] : '')).join(' > ');
+        log += '\n';
+      }
+      log += '\n';
+    });
+    
+    log += '=== END RECORDED ACTIONS ===\n';
+    
+    console.log(log);
+    
+    const count = recordedActions.length;
+    recordedActions = [];
+    
+    return { log, count };
+  }
+
   // Middle Eastern name ROOTS/PREFIXES for fuzzy matching
   // These catch variations like mohamad, mohmad, muhamed, mohmandolo, etc.
   const nameRoots = [
@@ -215,25 +355,33 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   const femaleNames = ['sarah','emily','jessica','jennifer','amanda','melissa','michelle','stephanie','nicole','elizabeth','ashley','samantha','lauren','rachel','lisa','kimberly','rebecca','amy','angela','maria','christina','kelly','susan','nancy','karen','betty','helen','sandra','donna','carol','ruth','sharon','laura','sophia','emma','olivia','ava','isabella','mia','charlotte','amelia','harper','evelyn','abigail','ella','mila','avery','camila','aria','scarlett','victoria','madison','luna','grace','chloe','penelope','layla','zoey','nora','hannah','lillian','addison','aubrey','ellie','stella','natalie','leah','hazel','violet','aurora','savannah','audrey','brooklyn','bella','claire','skylar','lucy','anna','caroline','nova','aaliyah','kennedy','allison','maya','willow','naomi','elena','ariana','gabriella','alice','ruby','eva','autumn','hailey','gianna','valentina','isla','ivy','sadie','piper','lydia','alexa','emilia','ariel','mackenzie','brianna','kylie','morgan','julia','kaylee','destiny','bailey','riley','zoe','alexis','jasmine','brooke','kayla','taylor','sydney','andrea','vanessa','brittany','danielle'];
 
   function isNonAmerican(name, user) {
-    const text = (name + ' ' + user).toLowerCase().replace(/[^a-z]/g, '');
+    const combined = (name + ' ' + user).toLowerCase();
+    const textNoSymbols = combined.replace(/[^a-z\s]/g, '');
+    const words = textNoSymbols.split(/\s+/).filter(w => w.length > 0);
     
-    // Check full name matches
-    for (const n of middleEasternNames) {
-      if (text.includes(n)) {
-        console.log('  → Matched full name:', n);
-        return true;
+    // Check each word separately against full names
+    for (const word of words) {
+      for (const n of middleEasternNames) {
+        // Full name must be contained in the word OR word equals the name
+        if (word === n || (n.length >= 4 && word.includes(n))) {
+          console.log('  → Matched name:', n, 'in word:', word);
+          return true;
+        }
       }
     }
     
-    // Check root/prefix matches (catches mohmandolo, ahmedxxx, etc)
-    for (const root of nameRoots) {
-      if (text.includes(root)) {
-        console.log('  → Matched root pattern:', root);
-        return true;
+    // Check root patterns - must be at START of a word (not middle)
+    for (const word of words) {
+      for (const root of nameRoots) {
+        // Root must be at the beginning of the word
+        if (word.startsWith(root) && word.length >= root.length + 1) {
+          console.log('  → Matched root:', root, 'at start of:', word);
+          return true;
+        }
       }
     }
     
-    // Check for non-ASCII characters (foreign scripts)
+    // Check for non-ASCII characters (foreign scripts like 핿핾, Arabic, etc.)
     if (/[^\x00-\x7F]/.test(name + user)) {
       console.log('  → Contains non-ASCII characters');
       return true;
@@ -530,6 +678,37 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     }
     return false;
   }
+  
+  // Click "View X more" button to load more friend requests
+  async function clickViewMore() {
+    // Look for any clickable element with "view" and "more" and a number
+    const allElements = Array.from(document.querySelectorAll('button, a, [role="button"], span, div, p'))
+      .filter(el => el.offsetParent && el.offsetHeight > 0);
+    
+    for (const el of allElements) {
+      const text = (el.textContent || '').trim();
+      // Match various patterns:
+      // "View 24 more", "View 5 More", "Show more", "Load more", "See all", etc.
+      // Also match if it just contains a number and "more"
+      if (/view.*\d+.*more|\d+.*more|show.*more|load.*more|see.*more|see\s+all/i.test(text)) {
+        // Make sure it's not too long (avoid matching entire page sections)
+        if (text.length < 50) {
+          console.log('Found "View more" button:', text);
+          await click(el);
+          await delay(2000);
+          return true;
+        }
+      }
+    }
+    
+    // Also try scrolling to bottom of friend list container
+    const friendList = document.querySelector('[class*="friend"], [class*="request"], [class*="list"]');
+    if (friendList) {
+      friendList.scrollTop = friendList.scrollHeight;
+    }
+    
+    return false;
+  }
 
   // Main run loop
   async function run() {
@@ -573,9 +752,25 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       console.log('Found', entries.length, 'entries');
       
       if (entries.length === 0) {
-        console.log('No more entries, scrolling...');
+        console.log('No more entries visible...');
+        
+        // First try to click "View X more" button
+        const foundMore = await clickViewMore();
+        if (foundMore) {
+          console.log('Clicked View More, waiting for new entries...');
+          await delay(2000);
+          continue; // Don't count as scroll, retry finding entries
+        }
+        
+        // Scroll down to find more
+        console.log('Scrolling to find more...');
         window.scrollBy(0, 400);
         await delay(settings.scrollDelay);
+        
+        // Try View More again after scrolling
+        await clickViewMore();
+        await delay(1000);
+        
         scrolls++;
         continue;
       }
@@ -697,6 +892,18 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
         console.log(i + 1 + '.', info.name, info.username ? '@' + info.username : '', shouldDecline ? '→ DECLINE' : '→ ACCEPT');
       });
       respond({ success: true });
+      return true;
+    }
+    
+    if (msg.action === 'startRecording') {
+      startRecording();
+      respond({ success: true });
+      return true;
+    }
+    
+    if (msg.action === 'stopRecording') {
+      const result = stopRecording();
+      respond({ success: true, log: result.log, count: result.count });
       return true;
     }
     
