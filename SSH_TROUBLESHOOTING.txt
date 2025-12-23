@@ -1,0 +1,127 @@
+================================================================================
+SSH CONNECTION TROUBLESHOOTING FOR 207.231.108.4
+================================================================================
+
+IF SSH IS NOT WORKING, TRY THESE:
+
+1. CHECK IF SSH IS INSTALLED
+   ---------------------------
+   Open PowerShell and type: ssh
+   If it says "command not found", SSH is not installed on your Windows.
+   
+   SOLUTION: Use web browser method instead (see below)
+
+
+2. TEST CONNECTION
+   ---------------
+   Try: ping 207.231.108.4
+   If ping works, the server is reachable.
+   If ping fails, check your internet connection or firewall.
+
+
+3. CHECK PORT
+   -----------
+   SSH uses port 22. Try:
+   ssh -p 22 root@207.231.108.4
+   
+   If port 22 is blocked, the server might use a different port.
+   Ask your server admin what port to use.
+
+
+4. COMMON SSH ERRORS
+   ------------------
+   
+   "Connection refused"
+   - Server might not have SSH enabled
+   - Wrong port number
+   - Firewall blocking connection
+   
+   "Permission denied"
+   - Wrong password
+   - Wrong username (should be "root")
+   - SSH key authentication required instead of password
+   
+   "Host key verification failed"
+   - Type: yes (to accept the host key)
+   
+   "Connection timed out"
+   - Server might be down
+   - Firewall blocking port 22
+   - Wrong IP address
+
+
+5. ALTERNATIVE: USE WEB BROWSER (NO SSH NEEDED)
+   ---------------------------------------------
+   This is usually easier and doesn't require SSH:
+   
+   a) Open your web browser
+   b) Go to: http://207.231.108.4
+      OR: https://207.231.108.4
+   c) Look for:
+      - File Manager
+      - Control Panel
+      - cPanel
+      - Plesk
+      - Webmin
+      - Or any login page
+   d) Log in with:
+      Username: root
+      Password: (your root password)
+   e) Upload files through the web interface
+
+
+6. ALTERNATIVE: USE FTP (IF AVAILABLE)
+   -----------------------------------
+   Some servers have FTP enabled. Try:
+   
+   Open File Explorer
+   In address bar type: ftp://207.231.108.4
+   Enter username: root
+   Enter password: (your password)
+   
+   If this works, you can drag and drop files!
+
+
+7. ALTERNATIVE: CREATE FILES DIRECTLY ON SERVER
+   ---------------------------------------------
+   If you have ANY way to access the server (web terminal, VNC, etc.):
+   
+   You can copy the file contents and create them directly on the server
+   using nano, vi, or any text editor.
+
+
+8. CHECK WHAT ERROR YOU'RE GETTING
+   ---------------------------------
+   When you try to SSH, what exact error message do you see?
+   
+   Common messages:
+   - "ssh: connect to host 207.231.108.4 port 22: Connection refused"
+   - "Permission denied (publickey,password)"
+   - "Connection timed out"
+   - "Could not resolve hostname"
+   
+   Share the exact error and I can help more!
+
+
+9. IF YOU HAVE ANOTHER COMPUTER
+   -----------------------------
+   - If you have a Mac or Linux computer, SSH is built-in
+   - Use that computer to upload the files
+   - Or use a phone with an SSH app (like Termius)
+
+
+10. ASK YOUR SERVER ADMIN
+    ----------------------
+    Contact whoever set up the server and ask:
+    - Is SSH enabled?
+    - What port is SSH on? (usually 22)
+    - Do I need an SSH key instead of password?
+    - Is there a web-based file manager I can use?
+    - What's the best way to upload files?
+
+
+================================================================================
+RECOMMENDED: Try the web browser method first - it's usually the easiest!
+Just go to http://207.231.108.4 in your browser and see what comes up.
+================================================================================
+

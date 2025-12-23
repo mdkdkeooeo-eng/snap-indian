@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Snapchat Friend Filter",
+  "version": "1.0.0",
+  "description": "Automatically filter Snapchat friend requests based on name patterns and emoji",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://web.snapchat.com/*",
+    "https://snapchat.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.snapchat.com/*",
+        "https://snapchat.com/web/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
+

@@ -1,0 +1,91 @@
+================================================================================
+HOW TO UPLOAD FILES - SIMPLE INSTRUCTIONS
+================================================================================
+
+SSH is not working (connection timeout), so use your WEB BROWSER instead.
+
+================================================================================
+METHOD: Upload via Web Browser
+================================================================================
+
+STEP 1: Open your web browser (Chrome, Edge, Firefox, etc.)
+
+STEP 2: Type this in the address bar and press Enter:
+       http://207.231.108.4
+
+STEP 3: What do you see?
+   A) A login page → Go to STEP 4
+   B) A file manager/control panel → Go to STEP 5
+   C) A blank page or error → Try https://207.231.108.4 instead
+   D) Nothing loads → The server might not have a web interface
+
+STEP 4: If you see a login page:
+   - Username: root
+   - Password: (enter your root password)
+   - Click Login
+
+STEP 5: Once logged in, look for one of these:
+   - "File Manager" button/link
+   - "Upload Files" option
+   - "Files" menu
+   - A folder icon
+   - Any way to browse files
+
+STEP 6: Navigate to the /root directory (or just root folder)
+
+STEP 7: Upload these 5 files:
+   1. manifest.json
+   2. background.js
+   3. content.js
+   4. popup.html
+   5. popup.js
+
+   (Usually you can drag-and-drop them, or click "Upload" and select files)
+
+STEP 8: Done!
+
+================================================================================
+IF YOU CAN'T FIND FILE MANAGER:
+================================================================================
+
+Try creating a ZIP file instead:
+
+1. In your extension folder, select these 5 files:
+   - manifest.json
+   - background.js
+   - content.js
+   - popup.html
+   - popup.js
+
+2. Right-click → Send to → Compressed (zipped) folder
+
+3. Name it: extension.zip
+
+4. Upload the ZIP file via the web interface
+
+5. Extract it (usually right-click on the ZIP → Extract)
+
+================================================================================
+IF NOTHING LOADS IN BROWSER:
+================================================================================
+
+The server might not have a web interface. In that case:
+
+1. Ask whoever set up the server:
+   - How do I upload files?
+   - Is there a web-based file manager?
+   - What port is SSH on? (might not be 22)
+
+2. Or if you have access to another computer with Linux/Mac:
+   - Use that computer to upload via scp
+
+================================================================================
+QUICK TEST:
+================================================================================
+
+Right now, open your browser and go to: http://207.231.108.4
+
+What do you see? Tell me and I'll give you the exact next steps!
+
+================================================================================
+

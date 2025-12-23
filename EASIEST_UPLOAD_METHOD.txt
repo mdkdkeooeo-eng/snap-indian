@@ -1,0 +1,62 @@
+================================================================================
+EASIEST WAY TO UPLOAD (NO SSH NEEDED)
+================================================================================
+
+Since SSH isn't working, use your WEB BROWSER instead:
+
+STEP 1: Open your web browser (Chrome, Edge, Firefox, etc.)
+
+STEP 2: Try these URLs one by one:
+   http://207.231.108.4
+   https://207.231.108.4
+   http://207.231.108.4:8080
+   http://207.231.108.4/cpanel
+   http://207.231.108.4:2082
+
+STEP 3: When a page loads, look for:
+   - Login button/form
+   - File Manager
+   - Upload Files
+   - Control Panel
+   - cPanel
+   - Plesk
+   - Any file management option
+
+STEP 4: Log in with:
+   Username: root
+   Password: (your root password)
+
+STEP 5: Once logged in:
+   - Find "File Manager" or "Upload" option
+   - Navigate to /root directory
+   - Upload your files:
+     * manifest.json
+     * background.js
+     * content.js
+     * popup.html
+     * popup.js
+
+================================================================================
+ALTERNATIVE: Create a ZIP file
+================================================================================
+
+1. Select all 5 files (manifest.json, background.js, content.js, popup.html, popup.js)
+2. Right-click → Send to → Compressed (zipped) folder
+3. Name it: extension.zip
+4. Upload the ZIP file via web browser
+5. Extract it on the server (usually right-click → Extract)
+
+================================================================================
+IF WEB BROWSER DOESN'T WORK:
+================================================================================
+
+Tell me what you see when you go to http://207.231.108.4 in your browser:
+- Does a page load?
+- What does it say?
+- Is there a login form?
+- Any error message?
+
+This will help me give you the exact steps!
+
+================================================================================
+

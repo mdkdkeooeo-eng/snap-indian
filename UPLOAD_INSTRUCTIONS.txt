@@ -1,0 +1,124 @@
+================================================================================
+HOW TO UPLOAD FILES TO 207.231.108.4 (as root)
+================================================================================
+
+METHOD 1: Using Windows Built-in Features (If you have SSH access)
+-------------------------------------------------------------------
+
+If you already have SSH/terminal access to the server:
+
+1. Open Command Prompt or PowerShell
+2. Navigate to your extension folder:
+   cd "C:\Users\squeaky\Desktop\botty\proxy\snap bot"
+
+3. If you have SSH installed, you can try:
+   ssh root@207.231.108.4
+   (Then once connected, you can use commands on the server)
+
+4. Or if you have access to a web-based file manager on the server:
+   - Open browser
+   - Go to: http://207.231.108.4 (or https://207.231.108.4)
+   - Log in with root credentials
+   - Use the file manager to upload files
+
+
+METHOD 2: Using Web Browser (If server has web interface)
+----------------------------------------------------------
+
+1. Open your web browser
+2. Go to: http://207.231.108.4 (or https://207.231.108.4)
+3. Log in with:
+   Username: root
+   Password: (your root password)
+4. Look for "File Manager" or "Upload Files" option
+5. Navigate to /root directory
+6. Upload these files one by one:
+   - manifest.json
+   - background.js
+   - content.js
+   - popup.html
+   - popup.js
+
+
+METHOD 3: Create ZIP and Upload via Browser
+--------------------------------------------
+
+1. In your extension folder, select these files:
+   - manifest.json
+   - background.js
+   - content.js
+   - popup.html
+   - popup.js
+
+2. Right-click on the selected files
+3. Choose: "Send to" → "Compressed (zipped) folder"
+4. Name it: extension.zip
+5. If you have web access to the server:
+   - Go to http://207.231.108.4 in browser
+   - Log in as root
+   - Upload the ZIP file
+   - Extract it on the server (usually right-click → Extract)
+
+
+METHOD 4: Using Existing SSH/Terminal Access
+---------------------------------------------
+
+If you already have terminal/SSH access set up:
+
+1. Open your terminal/SSH client (if you have one)
+2. Connect to: root@207.231.108.4
+3. Once connected, you can:
+   - Create the files directly using nano/vim
+   - Or use wget/curl to download from a temporary location
+   - Or use scp from another machine that has it
+
+
+METHOD 5: Copy Files Manually (If you have remote desktop/VNC)
+---------------------------------------------------------------
+
+If you have remote desktop access:
+
+1. Connect to the server via Remote Desktop/VNC
+2. Open file explorer
+3. Navigate to /root directory
+4. Copy the files from your local machine
+5. Paste them into /root on the server
+
+
+FILES TO UPLOAD:
+----------------
+✓ manifest.json
+✓ background.js
+✓ content.js
+✓ popup.html
+✓ popup.js
+✓ icon16.png (if it exists)
+✓ icon48.png (if it exists)
+✓ icon128.png (if it exists)
+
+
+DESTINATION ON SERVER:
+----------------------
+/root/
+
+
+WHAT TO DO IF NONE OF THESE WORK:
+----------------------------------
+1. Check if you have any existing tools installed that can connect to servers
+2. Ask your server administrator for the best upload method
+3. Check if the server has a web-based control panel (cPanel, Plesk, etc.)
+4. If you have another computer with Linux/Mac, you can use scp from there
+
+
+TROUBLESHOOTING:
+----------------
+- If you get "connection refused": Check if port 22 (SSH) or port 21 (FTP) is open
+- If you can't access via browser: The server might not have a web interface
+- If you need to install tools: WinSCP or FileZilla are free and safe to install
+
+
+================================================================================
+NOTE: The easiest method is usually through a web-based file manager if your
+server has one. Check if you can access http://207.231.108.4 in a browser.
+================================================================================
+

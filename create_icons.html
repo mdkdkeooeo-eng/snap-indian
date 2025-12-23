@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Extension Icons</title>
+</head>
+<body>
+    <h1>Creating Extension Icons...</h1>
+    <canvas id="canvas16" width="16" height="16" style="display:none;"></canvas>
+    <canvas id="canvas48" width="48" height="48" style="display:none;"></canvas>
+    <canvas id="canvas128" width="128" height="128" style="display:none;"></canvas>
+    <script>
+        function createIcon(size, filename) {
+            const canvas = document.getElementById(`canvas${size}`);
+            const ctx = canvas.getContext('2d');
+            
+            // Yellow background (Snapchat color)
+            ctx.fillStyle = '#FFFC00';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add a simple "S" letter
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold ${size * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('S', size / 2, size / 2);
+            
+            // Convert to blob and download
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        // Create all icons
+        createIcon(16, 'icon16.png');
+        setTimeout(() => createIcon(48, 'icon48.png'), 100);
+        setTimeout(() => createIcon(128, 'icon128.png'), 200);
+        
+        setTimeout(() => {
+            document.body.innerHTML = '<h1>Icons created! Check your downloads folder and move them to the extension directory.</h1>';
+        }, 500);
+    </script>
+</body>
+</html>
+

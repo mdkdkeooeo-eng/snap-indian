@@ -1,0 +1,84 @@
+STEP-BY-STEP UPLOAD INSTRUCTIONS
+==================================
+
+Method 1: WinSCP (Easiest - No Command Line Needed)
+----------------------------------------------------
+
+1. Download WinSCP: https://winscp.net/eng/download.php
+   (Choose "Installation package")
+
+2. Install WinSCP (just click Next, Next, Install)
+
+3. Open WinSCP
+
+4. Click "New Site" button
+
+5. Fill in:
+   File protocol: SFTP
+   Host name: 207.231.108.4
+   Port number: 22
+   User name: root
+   Password: (enter your root password)
+   
+6. Click "Save" (optional - saves for next time)
+   Click "Login"
+
+7. On the LEFT side: Navigate to:
+   C:\Users\squeaky\Desktop\botty\proxy\snap bot
+
+8. On the RIGHT side: Navigate to:
+   /root
+
+9. Select these files on the LEFT:
+   - manifest.json
+   - background.js
+   - content.js
+   - popup.html
+   - popup.js
+   (Hold Ctrl to select multiple)
+
+10. Drag them to the RIGHT side (or right-click → Upload)
+
+11. Done!
+
+
+Method 2: Using FileZilla
+-------------------------
+
+1. Download: https://filezilla-project.org/download.php?type=client
+
+2. Install and open FileZilla
+
+3. At the top, enter:
+   Host: sftp://207.231.108.4
+   Username: root
+   Password: (your password)
+   Port: 22
+   
+4. Click "Quickconnect"
+
+5. Left side: Your local files
+   Right side: Server files (/root)
+
+6. Drag files from left to right
+
+
+Method 3: Create ZIP and Upload via Browser
+-------------------------------------------
+
+1. Select all these files:
+   - manifest.json
+   - background.js
+   - content.js
+   - popup.html
+   - popup.js
+
+2. Right-click → Send to → Compressed (zipped) folder
+
+3. Name it: extension.zip
+
+4. If you have web access to the server:
+   - Go to http://207.231.108.4 (or your file manager URL)
+   - Upload the ZIP
+   - Extract it on the server
+
