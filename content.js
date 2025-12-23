@@ -148,10 +148,10 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     const { name, user, text } = getInfo(entry.container);
     
     if (user && processed.has(user.toLowerCase())) return false;
-    if (user) processed.add(user.toLowerCase());
     
     console.log('Processing:', name, '@' + user);
     
+    // Check filters
     let shouldIgnore = false;
     let reason = '';
     
@@ -168,45 +168,99 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       reason = 'Female';
     }
     
+    console.log('  Filter result:', shouldIgnore ? 'IGNORE (' + reason + ')' : 'ACCEPT (American male)');
+    
     if (shouldIgnore) {
-      // Find X button (small icon button that's not Accept)
-      const allBtns = Array.from(entry.container.querySelectorAll('button, [role="button"]')).filter(b => b.offsetParent);
+      // MUST IGNORE - Find and click X button first, then confirm
+      // Look for ALL clickable elements in the entry
+      const allClickable = Array.from(entry.container.querySelectorAll('button, [role="button"], [tabindex="0"], svg')).filter(b => b.offsetParent);
+      
+      console.log('  Looking for X button among', allClickable.length, 'elements');
+      
       let xBtn = null;
       
-      for (const btn of allBtns) {
-        if (btn === entry.acceptBtn) continue;
-        const txt = btn.textContent.trim().toLowerCase();
-        if (txt === 'friends') continue;
+      // Method 1: Look for small SVG/icon buttons (X is usually small)
+      for (const el of allClickable) {
+        if (el === entry.acceptBtn) continue;
+        const txt = (el.textContent || '').trim().toLowerCase();
+        if (txt === 'accept' || txt === 'friends' || txt.includes('add')) continue;
         
-        // Small icon button
-        const rect = btn.getBoundingClientRect();
-        if (rect.width <= 50 && rect.height <= 50) {
-          xBtn = btn;
+        const rect = el.getBoundingClientRect();
+        // X button is usually small (under 50px) and square-ish
+        if (rect.width > 0 && rect.width <= 50 && rect.height <= 50) {
+          const hasSvg = el.tagName === 'SVG' || el.querySelector('svg');
+          if (hasSvg || txt === '' || txt === 'x' || txt === '×') {
+            xBtn = el.tagName === 'SVG' ? el.closest('button') || el.parentElement : el;
+            console.log('  Found X button (small icon):', xBtn.tagName, xBtn.className);
+            break;
+          }
+        }
+      }
+      
+      // Method 2: Any button that's not Accept and not Friends
+      if (!xBtn) {
+        for (const el of allClickable) {
+          if (el === entry.acceptBtn) continue;
+          if (el.tagName === 'SVG') continue;
+          const txt = (el.textContent || '').trim().toLowerCase();
+          if (txt === 'accept' || txt === 'friends' || txt.includes('add')) continue;
+          xBtn = el;
+          console.log('  Found X button (fallback):', xBtn.tagName, xBtn.className);
           break;
         }
       }
       
-      // Fallback: any button that's not Accept
+      // Method 3: Look outside entry but nearby (X might be sibling)
       if (!xBtn) {
-        xBtn = allBtns.find(b => b !== entry.acceptBtn && !b.textContent.toLowerCase().includes('friend'));
+        const parent = entry.container.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.querySelectorAll('button, [role="button"]')).filter(b => b.offsetParent && !entry.container.contains(b));
+          for (const sib of siblings) {
+            const rect = sib.getBoundingClientRect();
+            const entryRect = entry.container.getBoundingClientRect();
+            // Check if sibling is close to entry (within 100px)
+            if (Math.abs(rect.top - entryRect.top) < 100) {
+              xBtn = sib;
+              console.log('  Found X button (sibling):', xBtn.tagName);
+              break;
+            }
+          }
+        }
       }
       
       if (xBtn) {
-        console.log('  Ignoring:', reason);
+        console.log('  Clicking X button to start ignore...');
         await click(xBtn);
-        await confirmIgnore();
-        console.log('  ✓ Ignored');
-        return true;
+        await delay(500);
+        
+        // Now click Ignore in confirmation dialog
+        const confirmed = await confirmIgnore();
+        if (confirmed) {
+          console.log('  ✓ IGNORED:', reason, '-', name, '@' + user);
+          if (user) processed.add(user.toLowerCase());
+          return true;
+        } else {
+          console.log('  ⚠ Could not confirm ignore dialog');
+        }
       } else {
-        console.log('  ⚠ No X button found');
+        console.log('  ⚠ NO X BUTTON FOUND - skipping (will NOT accept)');
+        // List all buttons for debugging
+        allClickable.forEach((b, i) => {
+          console.log('    Button', i + 1, ':', b.tagName, '"' + (b.textContent || '').trim().substring(0, 20) + '"', b.className);
+        });
       }
+      
+      // DO NOT ACCEPT if we should ignore - just skip
+      return false;
+      
     } else {
-      console.log('  Accepting (American male)');
+      // ACCEPT - American male
+      console.log('  Clicking Accept button...');
       await click(entry.acceptBtn);
-      console.log('  ✓ Accepted');
+      console.log('  ✓ ACCEPTED:', name, '@' + user);
+      if (user) processed.add(user.toLowerCase());
+      return false;
     }
-    
-    return false;
   }
 
   // Open friend requests
@@ -321,13 +375,48 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     }
     
     if (msg.action === 'findAllButtons') {
-      const btns = Array.from(document.querySelectorAll('button')).filter(b => b.offsetParent);
-      let log = '=== BUTTON LOG ===\n';
+      const btns = Array.from(document.querySelectorAll('button, [role="button"], svg')).filter(b => b.offsetParent);
+      const entries = findEntries();
+      
+      let log = '=== SNAPCHAT BUTTON LOG ===\n\n';
+      log += 'Timestamp: ' + new Date().toISOString() + '\n';
       log += 'URL: ' + location.href + '\n';
-      log += 'Buttons: ' + btns.length + '\n\n';
-      btns.forEach((b, i) => {
-        log += (i + 1) + '. "' + b.textContent.trim().substring(0, 30) + '" class="' + (b.className || '').substring(0, 40) + '"\n';
+      log += 'Total clickable elements: ' + btns.length + '\n';
+      log += 'Friend entries found: ' + entries.length + '\n\n';
+      
+      log += '=== FRIEND ENTRIES ===\n\n';
+      entries.forEach((e, i) => {
+        const info = getInfo(e.container);
+        const allBtns = Array.from(e.container.querySelectorAll('button, [role="button"], svg')).filter(b => b.offsetParent);
+        log += '--- Entry ' + (i + 1) + ' ---\n';
+        log += 'Name: ' + info.name + '\n';
+        log += 'Username: @' + info.user + '\n';
+        log += 'Would filter: ' + (isFemale(info.name, info.user) ? 'FEMALE ' : '') + (isNonAmerican(info.name, info.user) ? 'NON-AMERICAN ' : '') + (hasBrownEmoji(info.text) ? 'BROWN-EMOJI' : '') + '\n';
+        log += 'Buttons in entry: ' + allBtns.length + '\n';
+        allBtns.forEach((b, j) => {
+          const rect = b.getBoundingClientRect();
+          const txt = (b.textContent || '').trim();
+          const isAccept = b === e.acceptBtn;
+          log += '  ' + (j + 1) + '. ' + (isAccept ? '[ACCEPT] ' : '') + '"' + txt.substring(0, 20) + '" ' + b.tagName + ' ' + Math.round(rect.width) + 'x' + Math.round(rect.height) + 'px class="' + (b.className || '').substring(0, 30) + '"\n';
+        });
+        log += '\n';
       });
+      
+      log += '=== ALL BUTTONS ===\n\n';
+      btns.forEach((b, i) => {
+        const rect = b.getBoundingClientRect();
+        const txt = (b.textContent || '').trim();
+        const title = b.getAttribute('title') || '';
+        const aria = b.getAttribute('aria-label') || '';
+        log += (i + 1) + '. "' + txt.substring(0, 25) + '"';
+        if (title) log += ' title="' + title.substring(0, 20) + '"';
+        if (aria) log += ' aria="' + aria.substring(0, 20) + '"';
+        log += ' ' + b.tagName + ' ' + Math.round(rect.width) + 'x' + Math.round(rect.height) + 'px';
+        log += ' class="' + (b.className || '').substring(0, 35) + '"\n';
+      });
+      
+      log += '\n=== END LOG ===';
+      
       console.log(log);
       respond({ success: true, log: log });
       return true;
