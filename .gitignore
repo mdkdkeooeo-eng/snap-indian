@@ -1,7 +1,13 @@
-*.png
+# Ignore images except extension icons
 *.jpg
 *.jpeg
+*.gif
+*.bmp
+*.tiff
 .DS_Store
 node_modules/
 *.log
+
+# Allow extension icons (they're needed)
+!icon*.png
 

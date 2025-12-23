@@ -444,10 +444,17 @@ function findAcceptButton(container) {
   return null;
 }
 
-// Find friend entries
+// Find friend entries - improved detection based on actual Snapchat structure
 function findFriendEntries() {
-  // First, find all buttons that might be Accept buttons
+  // Method 1: Look for buttons with "Accept" or "Add Friend" text/aria-label
   const allButtons = Array.from(document.querySelectorAll('button'));
+  
+  // Method 2: Also look for containers that might hold friend requests
+  // Check for common patterns in friend request lists
+  const possibleContainers = document.querySelectorAll('div[class*="item"], div[class*="friend"], div[class*="suggestion"], div[class*="request"], div[class*="row"], div[class*="entry"], div[class*="card"], div[class*="list-item"]');
+  
+  // Method 3: Look for containers with buttons that have person/add icons
+  // (Accept buttons often have person+plus icon)
   
   // Find Accept buttons (text or icon-based)
   // Exclude "Friends" button explicitly
@@ -511,8 +518,10 @@ function findFriendEntries() {
   }
   
   if (acceptButtons.length === 0) {
-    console.log('No Accept buttons found. Running debug...');
-    debugButtons();
+    console.log('No Accept buttons found. This might mean:');
+    console.log('1. Friend requests page is not open yet');
+    console.log('2. No friend requests available');
+    console.log('3. Friend requests are in a different structure');
     return [];
   }
   
@@ -798,9 +807,81 @@ async function scrollFriendList() {
   }
 }
 
+// Find and click "View friend requests" button
+async function openFriendRequests() {
+  console.log('Looking for "View friend requests" button...');
+  
+  // Method 1: Find by title attribute
+  const allButtons = Array.from(document.querySelectorAll('button'));
+  let friendRequestsBtn = null;
+  
+  for (const btn of allButtons) {
+    if (btn.offsetParent === null) continue; // Skip hidden
+    
+    const title = (btn.getAttribute('title') || '').toLowerCase();
+    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+    const text = btn.textContent.trim().toLowerCase();
+    
+    if (title.includes('view friend request') || 
+        title.includes('friend request') ||
+        ariaLabel.includes('friend request') ||
+        (text.includes('friend') && text.includes('request'))) {
+      friendRequestsBtn = btn;
+      console.log('Found "View friend requests" button by title/aria-label');
+      break;
+    }
+  }
+  
+  // Method 2: Find by class name pattern (from the log: "kwuI_")
+  if (!friendRequestsBtn) {
+    for (const btn of allButtons) {
+      if (btn.offsetParent === null) continue;
+      const className = btn.className || '';
+      // Look for button with friend request icon pattern
+      if (className.includes('kwuI_') || className.includes('friend')) {
+        const svg = btn.querySelector('svg');
+        if (svg) {
+          // Check if SVG has the friend request icon pattern (person with plus)
+          const paths = svg.querySelectorAll('path');
+          if (paths.length >= 2) {
+            friendRequestsBtn = btn;
+            console.log('Found "View friend requests" button by class/SVG pattern');
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  if (friendRequestsBtn) {
+    try {
+      console.log('Clicking "View friend requests" button...');
+      await humanLikeClick(friendRequestsBtn);
+      await new Promise(resolve => setTimeout(resolve, randomDelay(1000, 2000)));
+      console.log('Friend requests should be open now');
+      return true;
+    } catch (e) {
+      console.error('Error clicking friend requests button:', e);
+      return false;
+    }
+  } else {
+    console.log('Could not find "View friend requests" button - friend requests may already be open');
+    return true; // Assume already open
+  }
+}
+
 // Main processing loop
 async function processFriendRequests() {
   if (!isRunning) return;
+  
+  // First, try to open friend requests if not already open
+  const entries = findFriendEntries();
+  if (entries.length === 0) {
+    console.log('No friend entries found. Attempting to open friend requests...');
+    await openFriendRequests();
+    // Wait a bit for friend requests to load
+    await new Promise(resolve => setTimeout(resolve, randomDelay(1500, 2500)));
+  }
   
   let scrollCount = 0;
   let ignoredCount = 0;

@@ -1,0 +1,98 @@
+================================================================================
+QUICK GUIDE: Upload to GitHub
+================================================================================
+
+YES - Just add the files and Git will automatically override old ones!
+
+================================================================================
+STEP-BY-STEP:
+================================================================================
+
+1. Open PowerShell in this folder (or Command Prompt)
+
+2. Initialize Git (if not already done):
+   git init
+
+3. Add your GitHub repository (replace with YOUR repo URL):
+   git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+   
+   (If you get "already exists" error, skip this step - it's already connected)
+
+4. Add ALL files:
+   git add .
+
+5. Commit (save the changes):
+   git commit -m "Updated extension with persistent panel"
+
+6. Push to GitHub:
+   git push -u origin main
+   
+   (If it says "master" instead of "main", use: git push -u origin master)
+
+7. If it asks for username/password:
+   - Username: Your GitHub username
+   - Password: Use a Personal Access Token (not your GitHub password)
+     → Get token: GitHub → Settings → Developer settings → Personal access tokens
+
+================================================================================
+WHAT HAPPENS:
+================================================================================
+
+When you run "git add .", Git will:
+✅ Add NEW files (panel.html, panel.js, etc.)
+✅ UPDATE changed files (content.js, popup.js, etc. - overwrites old versions)
+✅ Keep unchanged files as-is
+
+You DON'T need to delete old files manually - Git handles it automatically!
+
+================================================================================
+FILES THAT WILL BE UPLOADED:
+================================================================================
+
+Extension files:
+- manifest.json
+- background.js
+- content.js
+- popup.html
+- popup.js
+- panel.html (NEW)
+- panel.js (NEW)
+- icon16.png
+- icon48.png
+- icon128.png
+
+Documentation:
+- README.md
+- INSTALL.md
+- GITHUB_UPLOAD.md
+- (other .txt and .md files)
+
+================================================================================
+IF YOU GET ERRORS:
+================================================================================
+
+"fatal: not a git repository"
+→ Run: git init
+
+"remote origin already exists"
+→ Skip the "git remote add" step, just do: git add . then git commit then git push
+
+"Authentication failed"
+→ Use Personal Access Token instead of password
+→ Or use GitHub Desktop app (easier!)
+
+"branch 'main' does not exist"
+→ Use: git push -u origin master (instead of main)
+
+================================================================================
+EASIEST METHOD (If you're new to Git):
+================================================================================
+
+1. Download GitHub Desktop: https://desktop.github.com/
+2. Install it
+3. File → Add Local Repository → Select this folder
+4. Click "Publish repository" (if new) or "Push origin" (if exists)
+5. Done! Much easier than command line.
+
+================================================================================
+
