@@ -11,11 +11,16 @@ let userInteractionBlocked = false;
 // Prevent user interaction when bot is running
 function preventUserInteraction() {
   if (userInteractionBlocked) return;
+  if (!isRunning) return; // Only block if bot is actually running
   userInteractionBlocked = true;
   
   // Disable scrolling
-  document.body.style.overflow = 'hidden';
-  document.documentElement.style.overflow = 'hidden';
+  if (document.body) {
+    document.body.style.overflow = 'hidden';
+  }
+  if (document.documentElement) {
+    document.documentElement.style.overflow = 'hidden';
+  }
   
   // Prevent scroll events
   const preventScroll = (e) => {
@@ -27,21 +32,22 @@ function preventUserInteraction() {
   };
   
   // Prevent wheel/scroll
-  document.addEventListener('wheel', preventScroll, { passive: false, capture: true });
-  document.addEventListener('scroll', preventScroll, { passive: false, capture: true });
-  document.addEventListener('touchmove', preventScroll, { passive: false, capture: true });
-  
-  // Prevent keyboard scrolling
-  document.addEventListener('keydown', (e) => {
-    if (isRunning && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End' || e.key === ' ')) {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    }
-  }, { capture: true });
-  
-  // Add overlay to prevent clicks (optional - might be too aggressive)
-  // We'll just prevent scrolling for now
+  try {
+    document.addEventListener('wheel', preventScroll, { passive: false, capture: true });
+    document.addEventListener('scroll', preventScroll, { passive: false, capture: true });
+    document.addEventListener('touchmove', preventScroll, { passive: false, capture: true });
+    
+    // Prevent keyboard scrolling
+    document.addEventListener('keydown', (e) => {
+      if (isRunning && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End' || e.key === ' ')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    }, { capture: true });
+  } catch (e) {
+    console.error('Error setting up interaction blocking:', e);
+  }
 }
 
 function allowUserInteraction() {
@@ -57,6 +63,15 @@ function allowUserInteraction() {
 
 // Create and inject panel
 function createPanel() {
+  // Check if already exists
+  const existing = document.getElementById('snapchat-filter-panel');
+  if (existing) {
+    existing.style.display = 'flex';
+    panelContainer = existing;
+    panelIframe = existing.querySelector('iframe');
+    return;
+  }
+  
   if (panelContainer) {
     panelContainer.style.display = 'flex';
     return;
@@ -89,13 +104,24 @@ function createPanel() {
   `;
   
   panelContainer.appendChild(panelIframe);
-  document.body.appendChild(panelContainer);
+  
+  // Wait for body to be ready
+  if (document.body) {
+    document.body.appendChild(panelContainer);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (document.body) {
+        document.body.appendChild(panelContainer);
+      }
+    });
+  }
 }
 
 // Remove panel
 function removePanel() {
   if (panelContainer) {
     panelContainer.style.display = 'none';
+    chrome.storage.local.set({ panelOpen: false });
   }
 }
 
@@ -963,6 +989,7 @@ async function processFriendEntry(entry) {
       
       if (ignoreBtn && ignoreBtn.offsetParent !== null) {
         try {
+          console.log(`  Found ignore button, clicking...`);
           await humanLikeClick(ignoreBtn);
           await handleIgnoreConfirmation();
           console.log(`  ✓ Ignored: ${reason} - ${name} (@${username})`);
@@ -971,7 +998,32 @@ async function processFriendEntry(entry) {
           console.error(`  Error ignoring ${name}:`, e);
         }
       } else {
+        // Log all buttons in entry for debugging
         console.log(`  ⚠ Could not find ignore button for ${name}`);
+        console.log(`  Available buttons in entry:`, allElements.map(btn => ({
+          tag: btn.tagName,
+          text: btn.textContent.trim(),
+          ariaLabel: btn.getAttribute('aria-label'),
+          className: btn.className,
+          hasSvg: !!btn.querySelector('svg')
+        })));
+        
+        // Last resort: Try clicking any button that's not Accept (might trigger menu)
+        const acceptBtn = findAcceptButton(entry);
+        const otherButtons = allElements.filter(btn => btn !== acceptBtn && btn.offsetParent !== null);
+        if (otherButtons.length > 0) {
+          console.log(`  Trying fallback: clicking first non-Accept button`);
+          try {
+            await humanLikeClick(otherButtons[0]);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            // Check if confirmation dialog appeared
+            await handleIgnoreConfirmation();
+            console.log(`  ✓ Ignored (fallback): ${reason} - ${name} (@${username})`);
+            return true;
+          } catch (e) {
+            console.error(`  Fallback failed for ${name}:`, e);
+          }
+        }
       }
     } else {
       // Accept the friend request
@@ -1310,16 +1362,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.action === 'openPanel') {
     createPanel();
+    chrome.storage.local.set({ panelOpen: true });
     sendResponse({ success: true });
     return true;
   } else if (message.action === 'closePanel') {
     removePanel();
+    chrome.storage.local.set({ panelOpen: false });
     sendResponse({ success: true });
+    return true;
+  } else if (message.action === 'togglePanel') {
+    if (panelContainer && panelContainer.style.display !== 'none') {
+      removePanel();
+      sendResponse({ success: true, visible: false });
+    } else {
+      createPanel();
+      chrome.storage.local.set({ panelOpen: true });
+      sendResponse({ success: true, visible: true });
+    }
+    return true;
+  }
+  
+  } else if (message.action === 'togglePanel') {
+    if (panelContainer && panelContainer.style.display !== 'none') {
+      removePanel();
+      sendResponse({ success: true, visible: false });
+    } else {
+      createPanel();
+      sendResponse({ success: true, visible: true });
+    }
     return true;
   }
   
   // Default response
   sendResponse({ success: false, error: 'Unknown action' });
   return true;
+});
+
+// Auto-open panel when page loads (if on Snapchat)
+// Check storage to see if panel should be open
+chrome.storage.local.get(['panelOpen'], (result) => {
+  if (verifySnapchatWeb() && result.panelOpen !== false) {
+    // Wait for page to be ready
+    const tryCreatePanel = () => {
+      if (document.body) {
+        createPanel();
+        chrome.storage.local.set({ panelOpen: true });
+      } else {
+        setTimeout(tryCreatePanel, 100);
+      }
+    };
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(tryCreatePanel, 500);
+      });
+    } else {
+      setTimeout(tryCreatePanel, 500);
+    }
+  }
 });
 

@@ -18,15 +18,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('filterBrownEmoji').checked = settings.filterBrownEmoji;
   document.getElementById('humanLikeMouse').checked = settings.humanLikeMouse;
   
-  // Check if script is running and verify URL
+  // Auto-open panel when popup opens
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     if (tabs[0]) {
       const url = tabs[0].url || '';
-      if (!isSnapchatWeb(url)) {
+      if (isSnapchatWeb(url)) {
+        try {
+          // Try to open panel
+          await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+          chrome.storage.local.set({ panelOpen: true });
+          updateStatus('stopped', 'Panel opened on page');
+          // Keep popup open for a moment so user sees the message
+          setTimeout(() => {
+            // Don't auto-close - let user close it
+          }, 500);
+        } catch (e) {
+          // Content script not loaded - try to inject it
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: tabs[0].id },
+              files: ['content.js']
+            });
+            setTimeout(async () => {
+              try {
+                await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
+                chrome.storage.local.set({ panelOpen: true });
+                updateStatus('stopped', 'Panel opened on page');
+              } catch (e2) {
+                updateStatus('error', 'Please refresh the page');
+              }
+            }, 500);
+          } catch (e2) {
+            updateStatus('error', 'Please refresh the page');
+          }
+        }
+      } else {
         updateStatus('error', 'Please navigate to web.snapchat.com');
-        return;
       }
       
+      // Check if script is running
       try {
         const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'getStatus' });
         if (response && response.running) {
@@ -36,7 +66,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } catch (e) {
         // Content script not loaded yet - that's okay
-        updateStatus('stopped', 'Ready - Click Start to begin');
       }
     }
   });
