@@ -45,11 +45,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('viewDbBtn')?.addEventListener('click', viewDatabase);
   document.getElementById('clearDbBtn')?.addEventListener('click', clearDatabase);
   
-  // Attach main control button handlers
-  document.getElementById('startBtn')?.addEventListener('click', handleStart);
-  document.getElementById('stopBtn')?.addEventListener('click', handleStop);
-  document.getElementById('findBtn')?.addEventListener('click', handleFindButtons);
-  
   // Attach tab button handlers
   document.getElementById('tabAddBtn')?.addEventListener('click', () => switchTab('add'));
   document.getElementById('tabChatBtn')?.addEventListener('click', () => switchTab('chat'));
@@ -62,6 +57,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         section.classList.toggle('collapsed');
       }
     });
+  });
+  
+  // Attach mode switch handlers
+  document.getElementById('friendsAddEnabled')?.addEventListener('change', function() {
+    updateModeSwitchVisuals();
+  });
+  document.getElementById('chatEnabled')?.addEventListener('change', function() {
+    updateModeSwitchVisuals();
   });
   
   // Load all settings
@@ -1076,8 +1079,8 @@ function sendMessage(action, data = {}) {
   });
 }
 
-// Start button handler (attached in DOMContentLoaded)
-async function handleStart() {
+// Start button - attach directly like working version
+document.getElementById('startBtn')?.addEventListener('click', async () => {
   const settings = saveSettings();
   
   try {
@@ -1106,10 +1109,10 @@ async function handleStart() {
   } catch (e) {
     updateStatus('error', 'Error: ' + e.message);
   }
-}
+});
 
-// Stop button handler (will be attached in DOMContentLoaded)
-async function handleStop() {
+// Stop button - attach directly like working version
+document.getElementById('stopBtn')?.addEventListener('click', async () => {
   try {
     await sendMessage('stop');
   } catch (e) {}
@@ -1117,10 +1120,10 @@ async function handleStop() {
   updateStatus('stopped', 'Stopped');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
-}
+});
 
-// Find buttons handler (will be attached in DOMContentLoaded)
-async function handleFindButtons() {
+// Find buttons - attach directly like working version
+document.getElementById('findBtn')?.addEventListener('click', async () => {
   try {
     const response = await sendMessage('findAllButtons');
     if (response && response.log) {
