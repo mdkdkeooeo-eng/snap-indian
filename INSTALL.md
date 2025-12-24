@@ -36,3 +36,4 @@ You can:
 That's it! The extension will automatically filter friend requests.
 
 
+

@@ -1,5 +1,38 @@
 // Panel script
 
+// Tab switching
+window.switchTab = function(tabName) {
+  // Hide all tab contents
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  
+  // Remove active from all tabs
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  
+  // Show selected tab content
+  const tabContent = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+  if (tabContent) {
+    tabContent.classList.add('active');
+  }
+  
+  // Activate selected tab button
+  const tabButton = event.target;
+  if (tabButton) {
+    tabButton.classList.add('active');
+  }
+};
+
+// Section toggling
+window.toggleSection = function(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (section) {
+    section.classList.toggle('collapsed');
+  }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Panel loaded');
   
@@ -45,8 +78,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Scheduling & Anti-bot
       enableSchedule: false,
-      scheduleStart: '8am',
-      scheduleEnd: '1am',
+      scheduleStart: '08:00',
+      scheduleEnd: '01:00',
+      scheduleStopTime: '23:00',
       weekendSchedule: false,
       weekendStart: '10am',
       weekendEnd: '3am',
@@ -227,7 +261,22 @@ function applySettingsToUI(s) {
   setChecked('filterBrownEmoji', s.filterBrownEmoji);
   setChecked('humanLikeMouse', s.humanLikeMouse);
   setChecked('useAI', s.useAI);
-  setVal('apiKey', s.apiKey);
+  // Set API key in both fields so it syncs between tabs
+  const apiKey = s.apiKey || '';
+  setVal('apiKey', apiKey);
+  setVal('apiKeyChat', apiKey);
+  
+  // Sync API key changes between fields
+  const apiKeyInput = document.getElementById('apiKey');
+  const apiKeyChatInput = document.getElementById('apiKeyChat');
+  if (apiKeyInput && apiKeyChatInput) {
+    apiKeyInput.addEventListener('input', () => {
+      apiKeyChatInput.value = apiKeyInput.value;
+    });
+    apiKeyChatInput.addEventListener('input', () => {
+      apiKeyInput.value = apiKeyChatInput.value;
+    });
+  }
   
   // Friends Add/Remove
   setChecked('autoAddFriends', s.autoAddFriends);
@@ -250,6 +299,7 @@ function applySettingsToUI(s) {
   setChecked('enableSchedule', s.enableSchedule);
   setVal('scheduleStart', s.scheduleStart);
   setVal('scheduleEnd', s.scheduleEnd);
+  setVal('scheduleStopTime', s.scheduleStopTime || '11pm');
   setChecked('weekendSchedule', s.weekendSchedule);
   setVal('weekendStart', s.weekendStart);
   setVal('weekendEnd', s.weekendEnd);
@@ -810,7 +860,8 @@ function saveSettings() {
     filterBrownEmoji: getChecked('filterBrownEmoji'),
     humanLikeMouse: getChecked('humanLikeMouse'),
     useAI: getChecked('useAI'),
-    apiKey: getVal('apiKey').trim(),
+    // Get API key from either field (prioritize Add tab, then Chat tab)
+    apiKey: (getVal('apiKey') || getVal('apiKeyChat') || '').trim(),
     
     // Friends Add/Remove
     autoAddFriends: getChecked('autoAddFriends'),
@@ -830,6 +881,7 @@ function saveSettings() {
     enableSchedule: getChecked('enableSchedule'),
     scheduleStart: getVal('scheduleStart'),
     scheduleEnd: getVal('scheduleEnd'),
+    scheduleStopTime: getVal('scheduleStopTime') || '11pm',
     weekendSchedule: getChecked('weekendSchedule'),
     weekendStart: getVal('weekendStart'),
     weekendEnd: getVal('weekendEnd'),
@@ -978,8 +1030,8 @@ function saveSettings() {
 function updateStatus(type, msg) {
   const el = document.getElementById('status');
   if (el) {
-    el.className = 'status ' + type;
-    el.textContent = msg;
+  el.className = 'status ' + type;
+  el.textContent = msg;
   }
 }
 
@@ -1187,12 +1239,12 @@ document.getElementById('logsBtn').addEventListener('click', async () => {
     
     console.log(logText);
     
-      try {
+    try {
         const copied = await copyToClipboard(logText);
         updateStatus('stopped', copied ? 'Logs copied to clipboard! (' + logs.length + ' sessions)' : 'Check console (F12) for logs');
-      } catch (e) {
-        updateStatus('stopped', 'Check console (F12) for logs');
-      }
+    } catch (e) {
+      updateStatus('stopped', 'Check console (F12) for logs');
+    }
   } catch (e) {
     updateStatus('error', e.message);
   }

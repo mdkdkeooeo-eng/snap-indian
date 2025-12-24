@@ -32,6 +32,45 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   let panel = null;
   let declineButtonMissing = false; // Track if we've warned about missing decline button
   
+  // Persistent state management
+  async function saveRunningState() {
+    try {
+      await chrome.storage.local.set({ 
+        sf_running: isRunning,
+        sf_settings: settings,
+        sf_timestamp: Date.now()
+      });
+    } catch (e) {
+      console.error('[SF] Error saving running state:', e);
+    }
+  }
+  
+  async function loadRunningState() {
+    try {
+      const data = await chrome.storage.local.get(['sf_running', 'sf_settings', 'sf_timestamp']);
+      // Only auto-resume if it was running within the last 5 minutes
+      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+      if (data.sf_running && data.sf_timestamp && data.sf_timestamp > fiveMinutesAgo && data.sf_settings) {
+        log('Auto-resuming from previous session...');
+        settings = data.sf_settings;
+        isRunning = true;
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('[SF] Error loading running state:', e);
+      return false;
+    }
+  }
+  
+  async function clearRunningState() {
+    try {
+      await chrome.storage.local.remove(['sf_running', 'sf_timestamp']);
+    } catch (e) {
+      console.error('[SF] Error clearing running state:', e);
+    }
+  }
+  
   // Action recording state
   let isRecordingActions = false;
   let recordedActions = [];
@@ -1166,6 +1205,98 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     }
   }
   
+  // Generate AI chat response using Anthropic API
+  async function generateAIChatResponse(lastMessage, conversationMessages, settings) {
+    try {
+      if (!settings.apiKey) {
+        log('No API key for AI chat');
+        return 'hey';
+      }
+      
+      // Build conversation history for Claude
+      const messages = [];
+      
+      // Add conversation history (recent messages)
+      if (conversationMessages && conversationMessages.length > 0) {
+        // Take last 10 messages to keep context manageable
+        const recentMessages = conversationMessages.slice(0, 10).reverse();
+        for (const msg of recentMessages) {
+          messages.push({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.content
+          });
+        }
+      } else {
+        // No history, start fresh
+        messages.push({
+          role: 'user',
+          content: lastMessage || 'hey'
+        });
+      }
+      
+      // Build system prompt from settings
+      const systemPrompt = buildAISystemPrompt(settings);
+      
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': settings.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 200,
+          system: systemPrompt,
+          messages: messages
+        })
+      });
+      
+      if (!response.ok) {
+        log('AI API error: ' + response.status);
+        return 'hey';
+      }
+      
+      const data = await response.json();
+      const text = data.content[0].text.trim();
+      return text || 'hey';
+      
+    } catch (e) {
+      log('Error generating AI chat response: ' + e);
+      return 'hey';
+    }
+  }
+  
+  // Build AI system prompt from settings
+  function buildAISystemPrompt(settings) {
+    const name = settings.personaName || 'Me';
+    const age = settings.personaAge || 22;
+    const style = settings.personaStyle || settings.chattingStyle || 'flirty';
+    const flirtLevel = settings.flirtLevel || 7;
+    const bio = settings.personaBio || '';
+    const interests = settings.hobbies || '';
+    
+    let prompt = `You are a real person named ${name}, age ${age}. You are NOT an AI.
+
+CRITICAL RULES:
+1. NEVER say you're an AI, bot, or assistant
+2. Act like a real person texting - casual, natural, with occasional typos
+3. Use lowercase mostly like real texting
+4. Read the ENTIRE conversation history before responding
+5. Make sure your response makes sense in context - don't act weird or out of context
+6. Don't repeat yourself or act like you don't remember what was just said
+7. Respond directly to what they're saying right now
+
+Style: ${style}, Flirt level: ${flirtLevel}/10`;
+
+    if (bio) prompt += `\nAbout you: ${bio}`;
+    if (interests) prompt += `\nYour interests: ${interests}`;
+    
+    prompt += `\n\nBe natural, engaging, and human-like. Read the conversation history and respond contextually.`;
+    
+    return prompt;
+  }
+  
   // Send photo to user (high-level function)
   async function sendPhotoToUser(userId, context = {}) {
     try {
@@ -1668,6 +1799,7 @@ SEXUAL:YES`;
     'hass', 'huss', 'husn',  // hassan/hussein
     'ibra', 'abdu', 'abd',  // ibrahim/abdullah
     'khal', 'khld',  // khalid/khalil
+    'tauf', 'tawf', 'touf',  // taufiq/tawfiq variants
     'must', 'mstf',  // mustafa
     'osma', 'usmn',  // osman/usman
     'isma',  // ismail
@@ -1761,7 +1893,7 @@ SEXUAL:YES`;
   // Full names to match exactly or as substring
   const middleEasternNames = [
     // Middle Eastern / Arabic
-    'ahmed','mohammed','muhammad','mohamed','mohammad','mohamad','muhamed','ali','hassan','hussain','hussein','omar','yusuf','yousef','ibrahim','abdullah','abdul','khalid','saad','tariq','zain','zayn','hamza','bilal','mustafa','osman','usman','ismail','salman','karim','jamal','rashid','faisal','nasser','mahmoud','majid','noor','reza','saeed','samir','waleed','yazan','zaid','adnan','amir','farid','hadi','hani','jamil','kareem','malik','nasir','qasim','sadiq','shahid','tahir','zahir','zaki','amin','arif','aziz','bashir','emad','fahad','ghazi','habib','imran','javed','jawad','khalil','latif','nabeel','nadeem','naveed','nazir','rafiq','rizwan','sabir','sajid','saleem','samad','shafiq','shahzad','shakir','sharif','taha','waqar','waqas','waseem','yasir','zafar','zahid','zubair','khan','sheikh','syed','iqbal','mirza','ramita','rukhsar',
+    'ahmed','mohammed','muhammad','mohamed','mohammad','mohamad','muhamed','ali','hassan','hussain','hussein','omar','yusuf','yousef','ibrahim','abdullah','abdul','khalid','saad','tariq','zain','zayn','hamza','bilal','mustafa','osman','usman','ismail','salman','karim','jamal','rashid','faisal','nasser','mahmoud','majid','noor','reza','saeed','samir','waleed','yazan','zaid','adnan','amir','farid','hadi','hani','jamil','kareem','malik','nasir','qasim','sadiq','shahid','tahir','zahir','zaki','amin','arif','aziz','bashir','emad','fahad','ghazi','habib','imran','javed','jawad','khalil','latif','nabeel','nadeem','naveed','nazir','rafiq','rizwan','sabir','sajid','saleem','samad','shafiq','shahzad','shakir','sharif','taha','waqar','waqas','waseem','yasir','zafar','zahid','zubair','khan','sheikh','syed','iqbal','mirza','ramita','rukhsar','taufeeque','taufiq','tawfiq','toufiq','taufique','ashu',
     // South Asian / Indian
     'preet','singh','raj','kumar','patel','gupta','sharma','ankit','rohit','vikram','suresh','dinesh','rakesh','daniyal','danyal','danya','ayan','aryan','ayaan','rehan','rohan','sohan','mohan','karan','arjun','varun','tarun','nikhil','rahul','sahil','vishal','kapil','sunil','anil','ravi','sanjay','vijay','ajay','manoj','deepak','ashok','vinod','pramod','naresh','ganesh','umesh','mukesh','lokesh','yogesh','jitesh','hitesh','ritesh','manish','danish','tanish','harish','girish','satish','nitish','pritesh','paresh','jayesh','brijesh','alpesh','chirag','nirav','maulik','ketan','chetan','hiren','jignesh','bhavesh','darshan','kishan','ishan','roshan','shan','farhan','burhan','imtiaz','mumtaz','nawaz','shabaz','faraz','niaz','liaqat','shaukat','barkat','rifat','aftab','mehtab','sohail','wajid','junaid','obaid','ubaid','humaid','saif','naif','hanif','sharif','siddiq','farooq','masood','mehmood','dawood','suleman','hafeez','azeez','muneeb','haseeb','munir','zaheer','sameer','tanveer','pervez','parveen','yasmeen','shireen','tasleem','hakeem','rahim','faheem','naeem','kaleem','haleem','akram','ikram','ashraf','musharaf','anwar','sarwar','dilwar','gulzar','sarfraz','shahbaz','riaz','ijaz','fayyaz','noman','othman','affan','irfan','kamran','adeel','aqeel','shakeel','jameel','sumeet','puneet','navneet',
     // Sikh/Punjabi names (comprehensive)
@@ -1795,7 +1927,8 @@ SEXUAL:YES`;
     'aman','arjun','varun','tarun','nikhil','rahul','sahil','vishal','kapil','karan','rohan','sohan','mohan',
     'preet','simran','gurleen','harleen','navleen','manleen','jasleen','ramandeep','sukhdeep','lovedeep',
     'prem','krishan','gopal','mohan','sohan','kishan','ishan','roshan','darshan','lakhan','rehan','farhan',
-    'shan','ali','omar','amir','zain','zayn','bilal','hamza','usman','imran','kamran','adeel','faisal'
+    'shan','ali','omar','amir','zain','zayn','bilal','hamza','usman','imran','kamran','adeel','faisal',
+    'ashu','ash','taufeeque','taufiq','tawfiq'
   ];
   
   // Sexual/inappropriate/spam terms to filter out
@@ -1913,71 +2046,72 @@ SEXUAL:YES`;
     const textNoSymbols = combined.replace(/[^a-z\s]/g, '');
     const words = textNoSymbols.split(/\s+/).filter(w => w.length > 0);
     
-    // Check for non-ASCII characters first (foreign scripts like 핿핾, Arabic, etc.)
-    if (/[^\x00-\x7F]/.test(name + user)) {
-      console.log('  → Contains non-ASCII characters');
-      return { match: true, reason: 'Non-American' };
-    }
-    
-    // Check short names list (exact match for first word / display name)
+    // Only check the FIRST NAME (first word) - if first name is American, accept regardless of last name
     const firstName = words[0] || '';
-    if (shortNonAmericanNames.includes(firstName)) {
-      console.log('  → Short name match:', firstName);
+    
+    if (!firstName) {
+      return { match: false, reason: '' };
+    }
+    
+    // Check for non-ASCII characters in first name only
+    const firstNameOnly = name.split(/\s+/)[0] || '';
+    if (/[^\x00-\x7F]/.test(firstNameOnly + user)) {
+      console.log('  → First name contains non-ASCII characters');
       return { match: true, reason: 'Non-American' };
     }
     
-    // Check Hispanic names (only if setting enabled)
+    // Check short names list (exact match for first name only)
+    if (shortNonAmericanNames.includes(firstName)) {
+      console.log('  → First name short name match:', firstName);
+      return { match: true, reason: 'Non-American' };
+    }
+    
+    // Check Hispanic names (only first name, only if setting enabled)
     if (checkHispanic) {
-      for (const word of words) {
-        if (hispanicNames.includes(word)) {
-          console.log('  → Hispanic name match:', word);
+      if (hispanicNames.includes(firstName)) {
+        console.log('  → First name Hispanic match:', firstName);
+        return { match: true, reason: 'Hispanic' };
+      }
+      // Check Hispanic roots in first name only
+      for (const root of hispanicRoots) {
+        if (firstName.startsWith(root) && firstName.length >= root.length + 2) {
+          console.log('  → First name Hispanic root match:', root, 'in', firstName);
           return { match: true, reason: 'Hispanic' };
         }
       }
-      // Check Hispanic roots
-      for (const word of words) {
-        for (const root of hispanicRoots) {
-          if (word.startsWith(root) && word.length >= root.length + 2) {
-            console.log('  → Hispanic root match:', root, 'in', word);
-            return { match: true, reason: 'Hispanic' };
-          }
-        }
+    }
+    
+    // Check first name against full names (non-Hispanic)
+    for (const n of middleEasternNames) {
+      // Exact match - first name equals the name
+      if (firstName === n) {
+        console.log('  → First name exact match:', n);
+        return { match: true, reason: 'Non-American' };
+      }
+      // Embedded match - only for longer names (6+ chars) to avoid false positives
+      // like "eren" in "conference"
+      if (n.length >= 6 && firstName.includes(n)) {
+        console.log('  → First name embedded match:', n, 'in', firstName);
+        return { match: true, reason: 'Non-American' };
+      }
+      // For 4-5 char names, only match at START of word
+      if (n.length >= 4 && n.length < 6 && firstName.startsWith(n)) {
+        console.log('  → First name at word start:', n, 'in', firstName);
+        return { match: true, reason: 'Non-American' };
       }
     }
     
-    // Check each word separately against full names (non-Hispanic)
-    for (const word of words) {
-      for (const n of middleEasternNames) {
-        // Exact match - word equals the name
-        if (word === n) {
-          console.log('  → Exact name match:', n);
-          return { match: true, reason: 'Non-American' };
-        }
-        // Embedded match - only for longer names (6+ chars) to avoid false positives
-        // like "eren" in "conference"
-        if (n.length >= 6 && word.includes(n)) {
-          console.log('  → Embedded name match:', n, 'in', word);
-          return { match: true, reason: 'Non-American' };
-        }
-        // For 4-5 char names, only match at START of word
-        if (n.length >= 4 && n.length < 6 && word.startsWith(n)) {
-          console.log('  → Name at word start:', n, 'in', word);
-          return { match: true, reason: 'Non-American' };
-        }
+    // Check root patterns in first name only - must be at START of the word
+    for (const root of nameRoots) {
+      // Root must be at the beginning of the first name AND word must be longer
+      if (firstName.startsWith(root) && firstName.length >= root.length + 2) {
+        console.log('  → First name matched root:', root, 'at start of:', firstName);
+        return { match: true, reason: 'Non-American' };
       }
     }
     
-    // Check root patterns - must be at START of a word (not middle)
-    for (const word of words) {
-      for (const root of nameRoots) {
-        // Root must be at the beginning of the word AND word must be longer
-        if (word.startsWith(root) && word.length >= root.length + 2) {
-          console.log('  → Matched root:', root, 'at start of:', word);
-          return { match: true, reason: 'Non-American' };
-        }
-      }
-    }
-    
+    // First name passed all checks - accept regardless of last name
+    console.log('  → First name is American, accepting (ignoring last name)');
     return { match: false, reason: '' };
   }
 
@@ -2543,9 +2677,16 @@ SEXUAL:YES`;
         lastFriendAddDayTimestamp = data.lastFriendAddDayTimestamp || today;
       }
       
-      if (data.lastFriendAddHourTimestamp !== currentHour) {
+      // Reset hourly counter if hour has changed
+      if (data.lastFriendAddHourTimestamp !== undefined && data.lastFriendAddHourTimestamp !== currentHour) {
         friendsAddedThisHour = 0;
         lastFriendAddHourTimestamp = currentHour;
+        // Save reset immediately
+        await chrome.storage.local.set({
+          friendsAddedThisHour: 0,
+          lastFriendAddHourTimestamp: currentHour
+        });
+        log('Hourly friend add counter reset (new hour started)');
       } else {
         friendsAddedThisHour = data.friendsAddedThisHour || 0;
         lastFriendAddHourTimestamp = data.lastFriendAddHourTimestamp || currentHour;
@@ -2563,22 +2704,417 @@ SEXUAL:YES`;
   }
   
   // Check if we can add more friends (hourly and daily limits)
-  function canAddMoreFriends() {
-    if (!settings) return false;
+  // Get current PST time
+  function getPSTTime() {
+    const now = new Date();
+    // Convert to PST (UTC-8) or PDT (UTC-7) - using simple UTC-8 for now
+    // For proper DST handling, you'd need a library, but this works for most cases
+    const pstOffset = -8 * 60; // PST is UTC-8 in minutes
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const pstTime = new Date(utcTime + (pstOffset * 60000));
+    return pstTime;
+  }
+  
+  // Check if current PST time is past stop time
+  function isPastStopTime() {
+    if (!settings || !settings.enableSchedule || !settings.scheduleStopTime) {
+      return false; // No stop time set
+    }
+    
+    const pstNow = getPSTTime();
+    const stopTime = parseTime(settings.scheduleStopTime);
+    const currentTime = pstNow.getHours() * 60 + pstNow.getMinutes();
+    
+    // Check if we've passed the stop time today
+    return currentTime >= stopTime;
+  }
+  
+  // Wait until next day (past midnight PST)
+  async function waitUntilNextDay() {
+    const pstNow = getPSTTime();
+    const tomorrow = new Date(pstNow);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0); // Start of next day
+    
+    const waitMs = tomorrow.getTime() - pstNow.getTime();
+    const waitMins = Math.ceil(waitMs / 60000);
+    const waitHours = Math.floor(waitMins / 60);
+    const remainingMins = waitMins % 60;
+    
+    log('⏰ Stop time reached. Waiting until tomorrow (PST)...');
+    updateStatus('Stop time reached - wait ' + waitHours + 'h ' + remainingMins + 'm', 'running');
+    
+    // Save stop state
+    await chrome.storage.local.set({
+      stoppedAtStopTime: true,
+      stopTimeReachedAt: Date.now()
+    });
+    
+    // Wait in chunks
+    let remaining = waitMs;
+    const chunkSize = 60000; // 1 minute chunks
+    while (remaining > 0 && isRunning) {
+      const chunk = Math.min(chunkSize, remaining);
+      await delay(chunk);
+      remaining -= chunk;
+      
+      // Check state periodically
+      const state = await chrome.storage.local.get(['sf_running']);
+      if (!state.sf_running) {
+        isRunning = false;
+        break;
+      }
+      
+      // Update status every minute
+      if (remaining > 0) {
+        const remainingMins = Math.ceil(remaining / 60000);
+        const remainingHours = Math.floor(remainingMins / 60);
+        const remainingMinsOnly = remainingMins % 60;
+        updateStatus('Stop time reached - wait ' + remainingHours + 'h ' + remainingMinsOnly + 'm', 'running');
+        await saveRunningState();
+      }
+    }
+    
+    if (!isRunning) return;
+    
+    // Clear stop state
+    await chrome.storage.local.set({
+      stoppedAtStopTime: false,
+      stopTimeReachedAt: 0
+    });
+    
+    log('✅ New day started (PST) - resuming...');
+    updateStatus('New day - resuming...', 'running');
+  }
+  
+  // Check if we should be stopped due to stop time (when app reopens)
+  async function checkStopTimeOnResume() {
+    try {
+      const data = await chrome.storage.local.get(['stoppedAtStopTime', 'stopTimeReachedAt']);
+      
+      if (data.stoppedAtStopTime && data.stopTimeReachedAt) {
+        // Check if it's past the stop time now
+        if (isPastStopTime()) {
+          // Still past stop time - check if it's a new day
+          const pstNow = getPSTTime();
+          const stopDate = new Date(data.stopTimeReachedAt);
+          const pstStopDate = getPSTTime();
+          pstStopDate.setTime(stopDate.getTime());
+          
+          // If same day and still past stop time, wait
+          if (pstNow.toDateString() === pstStopDate.toDateString()) {
+            log('⏰ Still past stop time - waiting until tomorrow...');
+            return true; // Need to wait
+          } else {
+            // New day, clear stop state
+            await chrome.storage.local.set({
+              stoppedAtStopTime: false,
+              stopTimeReachedAt: 0
+            });
+            return false; // Can resume
+          }
+        } else {
+          // No longer past stop time (new day), clear state
+          await chrome.storage.local.set({
+            stoppedAtStopTime: false,
+            stopTimeReachedAt: 0
+          });
+          return false;
+        }
+      }
+    } catch (e) {
+      log('Error checking stop time: ' + e);
+    }
+    return false;
+  }
+  
+  // Check if current time is within schedule window (using PST)
+  function isWithinSchedule() {
+    if (!settings || !settings.enableSchedule) {
+      return true; // No schedule restrictions
+    }
+    
+    const pstNow = getPSTTime();
+    const currentHour = pstNow.getHours();
+    const currentMinute = pstNow.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute; // Time in minutes since midnight
+    
+    // Check stop time first
+    if (isPastStopTime()) {
+      return false; // Past stop time
+    }
+    
+    // Check if weekend and weekend schedule is enabled
+    const isWeekend = pstNow.getDay() === 0 || pstNow.getDay() === 6;
+    if (isWeekend && settings.weekendSchedule) {
+      const weekendStart = parseTime(settings.weekendStart || '8am');
+      const weekendEnd = parseTime(settings.weekendEnd || '1am');
+      return isTimeInRange(currentTime, weekendStart, weekendEnd);
+    }
+    
+    // Regular weekday schedule
+    const scheduleStart = parseTime(settings.scheduleStart || '8am');
+    const scheduleEnd = parseTime(settings.scheduleEnd || '1am');
+    return isTimeInRange(currentTime, scheduleStart, scheduleEnd);
+  }
+  
+  // Parse time string - supports both military time (09:00, 21:00) and am/pm (8am, 11pm)
+  function parseTime(timeStr) {
+    if (!timeStr) return 0;
+    const cleaned = timeStr.trim().toLowerCase();
+    
+    // Check for military time format (HH:MM or HHMM)
+    const militaryMatch = cleaned.match(/^(\d{1,2}):?(\d{2})?$/);
+    if (militaryMatch) {
+      let hours = parseInt(militaryMatch[1]) || 0;
+      const minutes = parseInt(militaryMatch[2]) || 0;
+      if (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) {
+        return hours * 60 + minutes; // Return minutes since midnight
+      }
+    }
+    
+    // Fall back to am/pm format
+    const isPM = cleaned.includes('pm');
+    const isAM = cleaned.includes('am');
+    
+    // Extract hours and minutes
+    const match = cleaned.match(/(\d+)(?::(\d+))?/);
+    if (!match) return 0;
+    
+    let hours = parseInt(match[1]) || 0;
+    const minutes = parseInt(match[2]) || 0;
+    
+    // Convert to 24-hour format
+    if (isPM && hours !== 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+    
+    return hours * 60 + minutes; // Return minutes since midnight
+  }
+  
+  // Format minutes since midnight to military time string
+  function formatTime(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return String(hours).padStart(2, '0') + ':' + String(mins).padStart(2, '0');
+  }
+  
+  // Check if current time is in range (handles wrap-around like 8am-1am)
+  function isTimeInRange(current, start, end) {
+    if (start <= end) {
+      // Normal range (e.g., 8am-5pm)
+      return current >= start && current <= end;
+    } else {
+      // Wrapping range (e.g., 8am-1am, means 8am to next day 1am)
+      return current >= start || current <= end;
+    }
+  }
+  
+  // Apply variance to delay if enabled
+  function applyVarianceToDelay(delayMs) {
+    if (!settings || !settings.delayVariance) {
+      return delayMs;
+    }
+    
+    const variancePercent = settings.varianceAmount || 30;
+    // Random variance between -variancePercent% and +variancePercent%
+    const variance = (Math.random() * 2 - 1) * (variancePercent / 100); // -0.3 to +0.3 for 30%
+    const adjusted = delayMs * (1 + variance);
+    return Math.max(1000, Math.round(adjusted)); // Minimum 1 second
+  }
+  
+  // Check if we can add more friends - returns object with status
+  function checkFriendAddLimits() {
+    if (!settings) return { canAdd: false, reason: 'no-settings' };
+    
+    // Check schedule first
+    if (!isWithinSchedule()) {
+      return { canAdd: false, reason: 'schedule', hourlyLimit: false, dailyLimit: false };
+    }
+    
     const maxPerHour = settings.maxFriendsPerHour || 15;
     const maxPerDay = settings.maxFriendsPerDay || 50;
     
-    if (friendsAddedThisHour >= maxPerHour) {
-      log('Friend add hourly limit reached: ' + friendsAddedThisHour + '/' + maxPerHour);
-      return false;
-    }
-    
+    // Check daily limit first (this is the hard stop)
     if (friendsAddedToday >= maxPerDay) {
       log('Friend add daily limit reached: ' + friendsAddedToday + '/' + maxPerDay);
-      return false;
+      return { canAdd: false, reason: 'daily', hourlyLimit: false, dailyLimit: true };
     }
     
-    return true;
+    // Check hourly limit (this can wait and continue)
+    if (friendsAddedThisHour >= maxPerHour) {
+      log('Friend add hourly limit reached: ' + friendsAddedThisHour + '/' + maxPerHour);
+      return { canAdd: false, reason: 'hourly', hourlyLimit: true, dailyLimit: false };
+    }
+    
+    return { canAdd: true, reason: 'ok', hourlyLimit: false, dailyLimit: false };
+  }
+  
+  // Wait for pause to resume based on PST time
+  async function waitForPauseResume() {
+    const data = await chrome.storage.local.get(['pauseResumeTimePST']);
+    
+    if (!data.pauseResumeTimePST) {
+      log('No resume time found, skipping pause');
+      return;
+    }
+    
+    while (isRunning) {
+      const pstNow = getPSTTime();
+      const resumeTime = new Date(data.pauseResumeTimePST);
+      
+      if (pstNow.getTime() >= resumeTime.getTime()) {
+        // Pause is over
+        await chrome.storage.local.remove(['pauseResumeTimePST', 'pauseStartedAt', 'pauseDurationMins']);
+        log('✅ Pause complete (PST time reached)');
+        return;
+      }
+      
+      // Calculate remaining time
+      const remaining = resumeTime.getTime() - pstNow.getTime();
+      const remainingMins = Math.ceil(remaining / 60000);
+      
+      // Wait in small chunks and check PST time
+      await delay(30000); // 30 second chunks
+      
+      // Check if we should stop
+      const state = await chrome.storage.local.get(['sf_running']);
+      if (!state.sf_running) {
+        isRunning = false;
+        break;
+      }
+      
+      // Update status
+      const resumeTimeStr = formatTime(resumeTime.getHours() * 60 + resumeTime.getMinutes());
+      updateStatus('Pausing until ' + resumeTimeStr + ' PST (' + remainingMins + ' min left)', 'running');
+      await saveRunningState();
+    }
+  }
+  
+  // Check if we're in a pause and should wait (when app reopens)
+  async function checkPauseOnResume() {
+    try {
+      const data = await chrome.storage.local.get(['pauseResumeTimePST']);
+      
+      if (data.pauseResumeTimePST) {
+        const pstNow = getPSTTime();
+        const resumeTime = new Date(data.pauseResumeTimePST);
+        
+        if (pstNow.getTime() < resumeTime.getTime()) {
+          // Still in pause
+          const remaining = resumeTime.getTime() - pstNow.getTime();
+          const remainingMins = Math.ceil(remaining / 60000);
+          const resumeTimeStr = formatTime(resumeTime.getHours() * 60 + resumeTime.getMinutes());
+          log('⏳ Still in pause - resume at ' + resumeTimeStr + ' PST (' + remainingMins + ' min left)');
+          return true; // Need to wait
+        } else {
+          // Pause is over
+          await chrome.storage.local.remove(['pauseResumeTimePST', 'pauseStartedAt', 'pauseDurationMins']);
+          log('✅ Pause complete (resumed after app was closed)');
+          return false;
+        }
+      }
+    } catch (e) {
+      log('Error checking pause: ' + e);
+    }
+    return false;
+  }
+  
+  // Wait for hourly reset for friend adding (using PST)
+  async function waitForFriendAddHourlyReset() {
+    const pstNow = getPSTTime();
+    const nextHour = new Date(pstNow);
+    nextHour.setMinutes(0, 0, 0);
+    nextHour.setHours(nextHour.getHours() + 1);
+    
+    const resetTimePST = nextHour.getTime();
+    const waitMs = resetTimePST - pstNow.getTime();
+    const waitMins = Math.ceil(waitMs / 60000);
+    const resetTimeStr = formatTime(nextHour.getHours() * 60);
+    
+    log('⏳ Hourly friend add limit reached. Waiting until ' + resetTimeStr + ' PST (' + waitMins + ' min)...');
+    updateStatus('Hourly limit - wait until ' + resetTimeStr + ' PST', 'running');
+    
+    // Save hourly reset state
+    await chrome.storage.local.set({
+      hourlyResetTimePST: resetTimePST
+    });
+    await saveRunningState();
+    
+    // Wait and check PST time
+    while (isRunning) {
+      const currentPST = getPSTTime();
+      
+      if (currentPST.getTime() >= resetTimePST) {
+        // Hour reset - reset counter
+        friendsAddedThisHour = 0;
+        const currentHourPST = Math.floor(currentPST.getTime() / (60 * 60 * 1000));
+        lastFriendAddHourTimestamp = currentHourPST;
+        
+        await chrome.storage.local.set({
+          friendsAddedThisHour: 0,
+          lastFriendAddHourTimestamp: currentHourPST,
+          hourlyResetTimePST: null
+        });
+        
+        log('✅ Hourly friend add limit reset (PST), resuming...');
+        updateStatus('Hourly limit reset, resuming...', 'running');
+        return;
+      }
+      
+      // Wait in chunks and check PST time
+      await delay(60000); // 1 minute chunks
+      
+      // Check if we should stop
+      const state = await chrome.storage.local.get(['sf_running']);
+      if (!state.sf_running) {
+        isRunning = false;
+        break;
+      }
+      
+      // Update status
+      const remaining = resetTimePST - currentPST.getTime();
+      const remainingMins = Math.ceil(remaining / 60000);
+      updateStatus('Hourly limit - wait until ' + resetTimeStr + ' PST (' + remainingMins + ' min)', 'running');
+      await saveRunningState();
+    }
+  }
+  
+  // Check hourly reset on resume
+  async function checkHourlyResetOnResume() {
+    try {
+      const data = await chrome.storage.local.get(['hourlyResetTimePST']);
+      
+      if (data.hourlyResetTimePST) {
+        const pstNow = getPSTTime();
+        const resetTime = new Date(data.hourlyResetTimePST);
+        
+        if (pstNow.getTime() >= resetTime.getTime()) {
+          // Reset time passed - reset counter
+          friendsAddedThisHour = 0;
+          const currentHourPST = Math.floor(pstNow.getTime() / (60 * 60 * 1000));
+          lastFriendAddHourTimestamp = currentHourPST;
+          
+          await chrome.storage.local.set({
+            friendsAddedThisHour: 0,
+            lastFriendAddHourTimestamp: currentHourPST,
+            hourlyResetTimePST: null
+          });
+          
+          log('✅ Hourly reset completed (was waiting while app was closed)');
+          return false; // Can continue
+        } else {
+          // Still need to wait
+          const remaining = resetTime.getTime() - pstNow.getTime();
+          const remainingMins = Math.ceil(remaining / 60000);
+          const resetTimeStr = formatTime(resetTime.getHours() * 60);
+          log('⏳ Still waiting for hourly reset until ' + resetTimeStr + ' PST (' + remainingMins + ' min)');
+          return true; // Need to continue waiting
+        }
+      }
+    } catch (e) {
+      log('Error checking hourly reset: ' + e);
+    }
+    return false;
   }
   
   // Increment friend add counters
@@ -2639,8 +3175,9 @@ SEXUAL:YES`;
   // Add a friend (click Add button)
   async function addFriend(addEntry) {
     try {
-      if (!canAddMoreFriends()) {
-        return { success: false, reason: 'limit' };
+      const limitCheck = checkFriendAddLimits();
+      if (!limitCheck.canAdd) {
+        return { success: false, reason: limitCheck.dailyLimit ? 'daily-limit' : 'hourly-limit' };
       }
       
       log('Clicking Add button...');
@@ -2657,77 +3194,502 @@ SEXUAL:YES`;
   }
   
   // Friend adding loop with all limits
+  // ============================================
+  // CHAT/MESSAGING MODE
+  // ============================================
+  // Handles automated messaging with AI, phases, CTAs, follow-ups, etc.
+  // ============================================
+  
+  // Find conversations in the chat list
+  function findConversations() {
+    try {
+      const conversations = [];
+      
+      // Look for conversation list items - these are typically clickable divs/buttons with names
+      const conversationSelectors = [
+        '[data-testid*="conversation"]',
+        '[data-testid*="chat"]',
+        '[class*="Conversation"]',
+        '[class*="ChatItem"]',
+        'button[aria-label*="chat"]',
+        'div[role="button"][aria-label]'
+      ];
+      
+      // Get all potential conversation elements
+      const allElements = Array.from(document.querySelectorAll('button, div[role="button"], div[onclick]'))
+        .filter(el => el.offsetParent !== null); // Only visible
+      
+      for (const el of allElements) {
+        const ariaLabel = el.getAttribute('aria-label') || '';
+        const text = el.textContent || '';
+        
+        // Skip if it's clearly not a conversation (has "Add", "Send", "Accept", etc.)
+        if (ariaLabel.toLowerCase().includes('add') ||
+            ariaLabel.toLowerCase().includes('send') ||
+            ariaLabel.toLowerCase().includes('accept') ||
+            ariaLabel.toLowerCase().includes('decline')) {
+          continue;
+        }
+        
+        // Check if it might be a conversation (has a name-like pattern)
+        // Conversations typically have names visible
+        if (text.trim().length > 0 && text.trim().length < 50) {
+          // Try to extract name/username
+          const nameMatch = text.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+          if (nameMatch || ariaLabel.length > 0) {
+            conversations.push({
+              element: el,
+              name: nameMatch ? nameMatch[1] : text.trim(),
+              ariaLabel: ariaLabel,
+              text: text.trim()
+            });
+          }
+        }
+      }
+      
+      log('Found ' + conversations.length + ' potential conversations');
+      return conversations;
+    } catch (e) {
+      log('Error finding conversations: ' + e);
+      return [];
+    }
+  }
+  
+  // Click on a conversation to open it
+  async function openConversation(conversation) {
+    try {
+      log('Opening conversation: ' + conversation.name);
+      const clicked = await click(conversation.element);
+      if (clicked) {
+        await delay(2000); // Wait for chat to load
+        return true;
+      }
+      return false;
+    } catch (e) {
+      log('Error opening conversation: ' + e);
+      return false;
+    }
+  }
+  
+  // Determine what message to send based on conversation state
+  async function determineMessageToSend(userId, conversationHistory) {
+    try {
+      const tracking = await chrome.storage.local.get('conversationTracking');
+      const convTracking = tracking.conversationTracking || {};
+      const userTracking = convTracking[userId] || {};
+      
+      const messageCount = conversationHistory?.messages?.length || 0;
+      const exchanges = messageCount / 2; // Rough estimate
+      
+      // Check if this is the first message (opener)
+      if (!userTracking.firstMessageAt) {
+        log('First message - using opener');
+        return { type: 'opener', phase: 1 };
+      }
+      
+      // Check if we need to send follow-up
+      const followUpCheck = await shouldSendFollowUp(
+        userId,
+        settings.followUpDelay || 8,
+        settings.maxFollowUps || 20,
+        settings.followUpOnlyIfNoReply !== false
+      );
+      
+      if (followUpCheck.shouldSend) {
+        log('Sending follow-up: ' + followUpCheck.reason);
+        return { type: 'followUp', phase: await getCurrentPhase(userId, exchanges) };
+      }
+      
+      // Check if we should send CTA
+      const ctaCheck = await shouldAskForCTAAfterPhases(userId, exchanges);
+      if (ctaCheck.shouldAsk) {
+        log('All phases complete - sending CTA');
+        return { type: 'cta', phase: 'complete' };
+      }
+      
+      // Check current phase for regular message
+      const currentPhase = await getCurrentPhase(userId, exchanges);
+      
+      // Check if they asked for OnlyFans
+      const lastMessage = conversationHistory?.lastMessage || '';
+      if (settings.sendCTAOnOnlyFansRequest && 
+          /onlyfans|of|only fans/i.test(lastMessage)) {
+        log('They asked for OnlyFans - sending CTA immediately');
+        return { type: 'cta', phase: 'onlyfans-request' };
+      }
+      
+      // Regular message based on phase
+      return { type: 'message', phase: currentPhase.phaseNumber };
+      
+    } catch (e) {
+      log('Error determining message: ' + e);
+      return { type: 'message', phase: 1 };
+    }
+  }
+  
+  // Generate message text based on type and phase
+  async function generateMessageText(userId, messageType, phase, conversationHistory) {
+    try {
+      if (messageType === 'opener') {
+        // Use opener message (spintax or static)
+        const opener = settings.openerMessage || 'hey';
+        // TODO: Parse spintax here if needed
+        return opener;
+      }
+      
+      if (messageType === 'cta') {
+        // Use CTA info
+        const cta = settings.ctaInfo || 'Check out my OnlyFans!';
+        return cta;
+      }
+      
+      if (messageType === 'followUp') {
+        // Use AI for follow-up if enabled
+        if (settings.useAIFollowUps) {
+          // TODO: Generate AI follow-up
+          return 'hey, how are you?';
+        }
+      }
+      
+      // Regular AI message - generate using Anthropic API
+      if (settings.aiChatEnabled && settings.apiKey) {
+        try {
+          const context = await getConversationContext();
+          const response = await generateAIChatResponse(
+            conversationHistory?.lastMessage || 'hey',
+            context?.messages || [],
+            settings
+          );
+          return response || 'hey';
+        } catch (e) {
+          log('Error generating AI response: ' + e);
+          return 'hey';
+        }
+      }
+      
+      return 'hey';
+    } catch (e) {
+      log('Error generating message: ' + e);
+      return 'hey';
+    }
+  }
+  
+  // Main chat loop
+  async function runChat() {
+    if (!isRunning || !settings.chatEnabled) return;
+    
+    log('Starting chat mode...');
+    updateStatus('Chat mode started...', 'running');
+    
+    let messagesSent = 0;
+    let conversationsProcessed = 0;
+    
+    while (isRunning) {
+      // Find conversations
+      const conversations = findConversations();
+      if (conversations.length === 0) {
+        log('No conversations found, waiting...');
+        await delay(5000);
+        continue;
+      }
+      
+      log('Found ' + conversations.length + ' conversations');
+      
+      // Process each conversation
+      for (const conv of conversations) {
+        if (!isRunning) break;
+        
+        // Open conversation
+        const opened = await openConversation(conv);
+        if (!opened) {
+          log('Failed to open conversation: ' + conv.name);
+          continue;
+        }
+        
+        // Get conversation info
+        const userId = await getCurrentConversationUserId();
+        if (!userId) {
+          log('Could not get user ID for conversation');
+          continue;
+        }
+        
+        // Check if we should message this user
+        if (!await shouldMessageUser(userId)) {
+          log('Skipping user (already messaged): ' + userId);
+          conversationsProcessed++;
+          continue;
+        }
+        
+        // Read conversation history
+        const conversationHistory = await getConversationContext();
+        
+        // Determine what to send
+        const messagePlan = await determineMessageToSend(userId, conversationHistory);
+        log('Message plan: ' + messagePlan.type + ' (phase ' + messagePlan.phase + ')');
+        
+        // Generate message text
+        const messageText = await generateMessageText(userId, messagePlan.type, messagePlan.phase, conversationHistory);
+        
+        // Check if we should send photo (based on phase percentage)
+        const photoCheck = await shouldSendPhotoBasedOnPhase(userId, (conversationHistory?.messageCount || 0) / 2);
+        if (photoCheck.shouldSend) {
+          log('Sending photo: ' + photoCheck.reason);
+          await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
+          await delay(2000);
+        }
+        
+        // Send message
+        const sent = await sendTextMessage(messageText);
+        if (sent) {
+          messagesSent++;
+          await trackMessageSent(userId, messageText);
+          await markUserAsMessaged(userId);
+          log('Message sent: ' + messageText.substring(0, 50));
+        }
+        
+        // Delay before next conversation (respect chat speed settings)
+        const chatSpeed = settings.chatSpeed || 'medium';
+        const delays = {
+          slow: { min: 60, max: 300 },
+          medium: { min: 30, max: 180 },
+          fast: { min: 10, max: 60 }
+        };
+        const speedDelays = delays[chatSpeed] || delays.medium;
+        const delaySec = randDelay(
+          (settings.chatMinDelay || speedDelays.min) * 1000,
+          (settings.chatMaxDelay || speedDelays.max) * 1000
+        );
+        log('Waiting ' + (delaySec / 1000) + ' seconds before next conversation...');
+        await delay(delaySec);
+        
+        conversationsProcessed++;
+      }
+      
+      // Scroll to find more conversations
+      window.scrollBy(0, 400);
+      await delay(2000);
+    }
+    
+    log('Chat mode stopped. Messages sent: ' + messagesSent + ', Conversations: ' + conversationsProcessed);
+    updateStatus('Chat stopped - Sent: ' + messagesSent + ' messages', 'stopped');
+    await clearRunningState(); // Clear state when stopped
+  }
+  
   async function runFriendAdding() {
     if (!isRunning || !settings.autoAddFriends) return;
+    
+    // Check if we should be stopped due to stop time (when app reopens)
+    const shouldWaitForNextDay = await checkStopTimeOnResume();
+    if (shouldWaitForNextDay) {
+      await waitUntilNextDay();
+      if (!isRunning) return;
+    }
+    
+    // Check if we're in a pause and should wait
+    const inPause = await checkPauseOnResume();
+    if (inPause) {
+      await waitForPauseResume();
+      if (!isRunning) return;
+    }
+    
+    // Check if we're waiting for hourly reset
+    const waitingForHourly = await checkHourlyResetOnResume();
+    if (waitingForHourly) {
+      await waitForFriendAddHourlyReset();
+      if (!isRunning) return;
+    }
     
     await loadFriendAddLimits();
     friendsAddedCount = 0; // Reset pause counter
     
+    // Check stop time before starting
+    if (settings.enableSchedule && isPastStopTime()) {
+      log('⏰ Stop time (PST) reached - waiting until next day...');
+      await waitUntilNextDay();
+      if (!isRunning) return;
+    }
+    
     log('Starting friend adding mode...');
     updateStatus('Adding friends from Quick Add...', 'running');
+    await saveRunningState(); // Save state at start
     
     let added = 0;
     let skipped = 0;
     
     while (isRunning) {
-      // Check hourly/daily limits
-      if (!canAddMoreFriends()) {
-        log('Friend add limits reached - stopping');
-        break;
-      }
-      
-      // Find Add buttons
-      const addButtons = findAddButtons();
-      if (addButtons.length === 0) {
-        log('No Add buttons found, waiting...');
-        await delay(3000);
-        continue;
-      }
-      
-      log('Found ' + addButtons.length + ' Add buttons');
-      
-      // Process Add buttons
-      for (const addEntry of addButtons) {
-        if (!isRunning || !canAddMoreFriends()) break;
+      try {
+        // Save state periodically to survive refreshes
+        await saveRunningState();
         
-        const result = await addFriend(addEntry);
-        if (result.success) {
-          added++;
-          
-          // Check if we need to pause AFTER X adds
-          if (settings.pauseAfterAdds && 
-              friendsAddedCount > 0 && 
-              friendsAddedCount % settings.pauseAfterAddsCount === 0) {
-            const pauseMins = settings.pauseAfterAddsDuration || 10;
-            log('Pausing for ' + pauseMins + ' minutes after ' + friendsAddedCount + ' adds');
-            updateStatus('Pausing for ' + pauseMins + ' mins (added ' + friendsAddedCount + ' friends)', 'running');
-            await delay(pauseMins * 60 * 1000);
-            if (!isRunning) break;
-          }
-          
-          // Random delay between adds
-          const delaySec = randDelay(
-            (settings.friendAddMinDelay || 30) * 1000,
-            (settings.friendAddMaxDelay || 120) * 1000
-          );
-          log('Waiting ' + (delaySec / 1000) + ' seconds before next add...');
-          await delay(delaySec);
-        } else if (result.reason === 'limit') {
-          break; // Break out of loop if limit reached
-        } else {
-          skipped++;
+        // Check stop time first (PST)
+        if (settings.enableSchedule && isPastStopTime()) {
+          log('⏰ Stop time (PST) reached - waiting until next day...');
+          await waitUntilNextDay();
+          if (!isRunning) break;
+          continue; // Continue after new day starts
         }
         
-        await delay(randDelay(500, 1000));
+        // Check schedule and limits
+        const limitCheck = checkFriendAddLimits();
+        
+        if (!limitCheck.canAdd) {
+          // Check if it's schedule restriction
+          if (limitCheck.reason === 'schedule' && settings.enableSchedule) {
+            log('Outside scheduled hours - waiting 1 minute before checking again...');
+            updateStatus('Waiting for scheduled time...', 'running');
+            await delay(60000);
+            continue;
+          }
+          
+          // Check if it's hourly limit - wait and continue
+          if (limitCheck.hourlyLimit && !limitCheck.dailyLimit) {
+            await waitForFriendAddHourlyReset();
+            if (!isRunning) break;
+            continue; // Continue loop after hourly reset
+          }
+          
+          // Daily limit reached - stop completely
+          if (limitCheck.dailyLimit) {
+            log('Daily friend add limit reached - stopping');
+            updateStatus('Daily limit reached! Done for today.', 'stopped');
+            break;
+          }
+          
+          // Other reason - stop
+          log('Friend add stopped: ' + limitCheck.reason);
+          break;
+        }
+        
+        // Find Add buttons
+        const addButtons = findAddButtons();
+        if (addButtons.length === 0) {
+          log('No Add buttons found, waiting...');
+          await delay(3000);
+          continue;
+        }
+        
+        log('Found ' + addButtons.length + ' Add buttons');
+        
+        // Process Add buttons
+        for (const addEntry of addButtons) {
+          // Check limits before each add
+          const limitCheck = checkFriendAddLimits();
+          if (!isRunning || !limitCheck.canAdd) {
+            if (limitCheck.dailyLimit) break; // Daily limit - stop completely
+            if (limitCheck.hourlyLimit) break; // Hourly limit - will be handled in outer loop
+            break;
+          }
+          
+          // Save state before each action
+          await saveRunningState();
+          
+          // DELAY BEFORE each add (respects min/max delay settings + variance)
+          let minDelay = (settings.friendAddMinDelay || 30) * 1000;
+          let maxDelay = (settings.friendAddMaxDelay || 120) * 1000;
+          
+          // Apply variance if enabled
+          if (settings.delayVariance) {
+            minDelay = applyVarianceToDelay(minDelay);
+            maxDelay = applyVarianceToDelay(maxDelay);
+            // Ensure max is still >= min
+            if (maxDelay < minDelay) {
+              const temp = maxDelay;
+              maxDelay = minDelay;
+              minDelay = temp;
+            }
+          }
+          
+          const delayBeforeAdd = randDelay(minDelay, maxDelay);
+          log('Waiting ' + (delayBeforeAdd / 1000).toFixed(1) + ' seconds before clicking Add...' + 
+              (settings.delayVariance ? ' (with ±' + (settings.varianceAmount || 30) + '% variance)' : ''));
+          
+          // Break delay into chunks to allow stopping
+          let delayRemaining = delayBeforeAdd;
+          const chunkSize = 10000; // 10 second chunks
+          while (delayRemaining > 0 && isRunning) {
+            const chunk = Math.min(chunkSize, delayRemaining);
+            await delay(chunk);
+            delayRemaining -= chunk;
+            if (delayRemaining > 0 && isRunning) {
+              await saveRunningState();
+            }
+          }
+          
+          // Check again after delay
+          // Check limits again after delay
+          const limitCheckAfterDelay = checkFriendAddLimits();
+          if (!isRunning || !limitCheckAfterDelay.canAdd) {
+            if (limitCheckAfterDelay.dailyLimit) break;
+            if (limitCheckAfterDelay.hourlyLimit) break;
+            break;
+          }
+          
+          const result = await addFriend(addEntry);
+          if (result.success) {
+            added++;
+            // Counters already saved by incrementFriendAddCount() in addFriend()
+            
+            // Check if we need to pause AFTER X adds
+            // Note: This checks if we've reached the pause count (e.g., after 5 adds)
+            if (settings.pauseAfterAdds && 
+                settings.pauseAfterAddsCount > 0 &&
+                friendsAddedCount > 0 && 
+                friendsAddedCount % settings.pauseAfterAddsCount === 0) {
+              const pauseMins = settings.pauseAfterAddsDuration || 10;
+              
+              // Calculate resume time in PST
+              const pstNow = getPSTTime();
+              const resumeTimePST = new Date(pstNow.getTime() + (pauseMins * 60 * 1000));
+              const resumeTimeStr = formatTime(resumeTimePST.getHours() * 60 + resumeTimePST.getMinutes());
+              
+              log('🛑 Pausing for ' + pauseMins + ' minutes after ' + friendsAddedCount + ' adds (resume at ' + resumeTimeStr + ' PST)');
+              updateStatus('Pausing until ' + resumeTimeStr + ' PST (added ' + friendsAddedCount + ' friends)', 'running');
+              
+              // Save pause state with PST resume time
+              await chrome.storage.local.set({
+                pauseResumeTimePST: resumeTimePST.getTime(),
+                pauseStartedAt: pstNow.getTime(),
+                pauseDurationMins: pauseMins
+              });
+              
+              // Wait for pause using PST time checks
+              await waitForPauseResume();
+              
+              if (!isRunning) {
+                log('Stopped during pause');
+                break;
+              }
+              
+              // After pause completes, continue adding (don't break!)
+              log('✅ Pause complete - continuing to add more friends...');
+              updateStatus('Pause complete - continuing to add friends...', 'running');
+              await saveRunningState();
+            }
+          } else if (result.reason === 'limit') {
+            log('Hourly/daily limit reached - stopping');
+            break; // Break out of loop if limit reached
+          } else {
+            skipped++;
+            // Small delay even on skip to avoid rapid clicking
+            await delay(randDelay(500, 1000));
+          }
+        }
+        
+        // Scroll to find more
+        if (isRunning) {
+          window.scrollBy(0, 400);
+          await delay(2000);
+        }
+      } catch (err) {
+        console.error('[SF] Error in friend adding loop:', err);
+        // Continue running despite errors
+        await delay(2000);
       }
-      
-      // Scroll to find more
-      window.scrollBy(0, 400);
-      await delay(2000);
     }
     
     log('Friend adding stopped. Added: ' + added + ', Skipped: ' + skipped);
     updateStatus('Friend adding stopped - Added: ' + added, 'stopped');
+    await clearRunningState(); // Clear state when stopped
   }
   
   async function run() {
@@ -2804,10 +3766,21 @@ SEXUAL:YES`;
       updateStatus('Starting friend adding...', 'running');
       await runFriendAdding();
       isRunning = false;
+      clearRunningState(); // Clear persistent state
       return;
     }
     
-    // Friend request filtering mode (existing code) - runs when autoAddFriends is disabled
+    // Chat mode - if chatEnabled and aiChatEnabled
+    if (settings.chatEnabled && settings.aiChatEnabled) {
+      console.log('[SF] Starting chat mode...');
+      updateStatus('Starting chat mode...', 'running');
+      await runChat();
+      isRunning = false;
+      clearRunningState(); // Clear persistent state
+      return;
+    }
+    
+    // Friend request filtering mode (existing code) - runs when autoAddFriends and chat are disabled
     console.log('[SF] Starting friend request filtering mode (autoAddFriends disabled)...');
     let entries = findEntries();
     if (entries.length === 0) {
@@ -2965,6 +3938,7 @@ SEXUAL:YES`;
     console.log('Limits - Session:', acceptedThisSession, 'Hour:', acceptedThisHour, 'Today:', acceptedToday);
     
     isRunning = false;
+    clearRunningState(); // Clear persistent state
     updateStatus(msg, finalLimit === 'daily' ? 'warning' : 'stopped');
   }
 
@@ -2999,10 +3973,13 @@ SEXUAL:YES`;
       console.log('[SF] Starting with settings:', Object.keys(settings));
       isRunning = true;
       processed.clear();
+      await saveRunningState(); // Save state before starting
       run().catch(err => {
         console.error('[SF] Error in run():', err);
         isRunning = false;
-        updateStatus('Error: ' + err.message, 'error');
+        saveRunningState().then(() => {
+          updateStatus('Error: ' + err.message, 'error');
+        });
       });
       respond({ success: true });
       return true;
@@ -3010,13 +3987,15 @@ SEXUAL:YES`;
     
     if (msg.action === 'stop') {
       isRunning = false;
-      saveSessionEnd();
-      // Clear any wait states
-      chrome.storage.local.set({ 
-        waitingForHourly: false,
-        hourlyResetTime: 0
+      clearRunningState().then(() => {
+        saveSessionEnd();
+        // Clear any wait states
+        chrome.storage.local.set({ 
+          waitingForHourly: false,
+          hourlyResetTime: 0
+        });
+        saveLastActivity('Manually stopped');
       });
-      saveLastActivity('Manually stopped');
       respond({ success: true });
       return true;
     }
@@ -3147,11 +4126,28 @@ SEXUAL:YES`;
     return true;
   });
 
-  // Auto-open panel
+  // Auto-open panel and check for auto-resume
   if (location.href.includes('snapchat.com')) {
-    const tryOpen = () => {
+    const tryOpen = async () => {
       if (document.body) {
         setTimeout(createPanel, 2000);
+        
+        // Check if we should auto-resume
+        const wasRunning = await loadRunningState();
+        if (wasRunning && settings) {
+          log('Auto-resuming bot after page load...');
+          processed.clear();
+          // Wait a bit for page to fully load
+          setTimeout(() => {
+            run().catch(err => {
+              console.error('[SF] Error in auto-resume run():', err);
+              isRunning = false;
+              saveRunningState().then(() => {
+                updateStatus('Error: ' + err.message, 'error');
+              });
+            });
+          }, 3000);
+        }
       } else {
         setTimeout(tryOpen, 200);
       }

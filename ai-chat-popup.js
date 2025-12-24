@@ -427,3 +427,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 console.log('AI Chat Popup loaded');
 
+
