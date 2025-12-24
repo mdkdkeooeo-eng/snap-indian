@@ -69,3 +69,4 @@ If icon files are missing, you can:
 
 **Need help?** Share your server access method (FTP/SFTP/SSH) and I can provide more specific instructions.
 
+

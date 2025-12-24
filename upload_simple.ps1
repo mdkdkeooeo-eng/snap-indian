@@ -19,3 +19,4 @@ if (Test-Path "icon128.png") { scp icon128.png root@207.231.108.4:/root/ }
 Write-Host ""
 Write-Host "Upload complete!" -ForegroundColor Green
 
+

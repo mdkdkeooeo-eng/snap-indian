@@ -138,6 +138,54 @@
       font-weight: bold;
     }
     
+    .timer-box {
+      background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+      border: 2px solid #FFFC00;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      margin: 10px 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { border-color: #FFFC00; }
+      50% { border-color: #FF9800; }
+    }
+    .timer-label {
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+    .timer-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #FFFC00;
+      font-family: 'Courier New', monospace;
+    }
+    .timer-box.break { border-color: #FF9800; }
+    .timer-box.break .timer-value { color: #FF9800; }
+    .timer-box.hourly { border-color: #2196F3; }
+    .timer-box.hourly .timer-value { color: #2196F3; }
+    
+    .last-activity {
+      background: #2a2a2a;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .activity-label {
+      font-size: 11px;
+      color: #888;
+    }
+    .activity-value {
+      font-size: 12px;
+      color: #FFFC00;
+      text-align: right;
+    }
+    
     .status {
       margin-top: 10px;
       padding: 10px;
@@ -201,6 +249,18 @@
       </div>
     </div>
     
+    <!-- Timer Display -->
+    <div id="timerBox" class="timer-box" style="display:none;">
+      <div class="timer-label" id="timerLabel">Break ends in:</div>
+      <div class="timer-value" id="timerValue">--:--</div>
+    </div>
+    
+    <!-- Last Activity -->
+    <div class="last-activity" id="lastActivityBox">
+      <div class="activity-label">Last Activity:</div>
+      <div class="activity-value" id="lastActivity">Never</div>
+    </div>
+    
     <h2>Rate Limits</h2>
     <div class="row">
       <div class="field">
@@ -260,6 +320,10 @@
       Decline non-American names
     </label>
     <label class="checkbox">
+      <input type="checkbox" id="filterHispanic" checked>
+      Decline Hispanic/Mexican names
+    </label>
+    <label class="checkbox">
       <input type="checkbox" id="filterBrownEmoji" checked>
       Decline brown emoji profiles
     </label>
@@ -267,6 +331,17 @@
       <input type="checkbox" id="humanLikeMouse" checked>
       Human-like behavior
     </label>
+    <label class="checkbox">
+      <input type="checkbox" id="useAI" checked>
+      Use AI for name detection (more accurate)
+    </label>
+    
+    <h2>AI Settings</h2>
+    <div class="field">
+      <label>Anthropic API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-..." style="width:100%;padding:8px;border:1px solid #444;border-radius:4px;background:#2a2a2a;color:#fff;font-size:12px;">
+      <div class="help">Get key from console.anthropic.com</div>
+    </div>
     
     <button class="btn-start" id="startBtn">▶ Start Filtering</button>
     <button class="btn-stop" id="stopBtn" disabled>■ Stop</button>
@@ -281,6 +356,13 @@
       <button class="btn-secondary btn-small" id="exportBtn" style="flex:1; background:#4CAF50;">💾 Export</button>
       <button class="btn-secondary btn-small" id="importBtn" style="flex:1; background:#2196F3;">📂 Import</button>
       <button class="btn-secondary btn-small" id="logsBtn" style="flex:1; background:#FF9800;">📋 Logs</button>
+    </div>
+    <div class="row" style="margin-top: 8px;">
+      <button class="btn-secondary btn-small" id="userLogBtn" style="flex:1; background:#9C27B0;">👤 User Log</button>
+      <button class="btn-secondary btn-small" id="clearLogBtn" style="flex:1; background:#f44336;">🗑 Clear Log</button>
+    </div>
+    <div class="row" style="margin-top: 8px;">
+      <button class="btn-secondary btn-small" id="updateBtn" style="flex:1; background:#00BCD4;">🔄 Update from GitHub</button>
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none;">
     

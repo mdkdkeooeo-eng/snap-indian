@@ -36,3 +36,4 @@ foreach ($size in $sizes) {
 
 Write-Host "`nAll icons created successfully!" -ForegroundColor Cyan
 
+

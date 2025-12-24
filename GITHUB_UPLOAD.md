@@ -126,3 +126,4 @@ All these files should be uploaded:
 - Make sure icon files aren't huge (they should be small PNGs)
 - Git has a 100MB file size limit
 
+

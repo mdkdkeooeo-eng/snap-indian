@@ -16,8 +16,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       maxSession: 30,
       sessionBreakMins: 30,
       filterNonAmerican: true,
+      filterHispanic: true,
       filterBrownEmoji: true,
-      humanLikeMouse: true
+      humanLikeMouse: true,
+      useAI: true,
+      apiKey: ''
     });
     
     document.getElementById('minDelay').value = s.minDelay;
@@ -30,8 +33,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('maxSession').value = s.maxSession;
     document.getElementById('sessionBreakMins').value = s.sessionBreakMins;
     document.getElementById('filterNonAmerican').checked = s.filterNonAmerican;
+    document.getElementById('filterHispanic').checked = s.filterHispanic;
     document.getElementById('filterBrownEmoji').checked = s.filterBrownEmoji;
     document.getElementById('humanLikeMouse').checked = s.humanLikeMouse;
+    document.getElementById('useAI').checked = s.useAI;
+    document.getElementById('apiKey').value = s.apiKey;
     
     // Update limit displays
     updateLimitDisplays(s);
@@ -39,9 +45,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('Error loading settings:', e);
   }
   
-  // Load and display stats
+  // Load and display stats (every 1 second for smooth timer)
   updateStats();
-  setInterval(updateStats, 2000);
+  setInterval(updateStats, 1000);
   
   updateStatus('stopped', 'Ready');
 });
@@ -69,15 +75,98 @@ async function updateStats() {
   try {
     const data = await chrome.storage.local.get([
       'acceptedToday', 'acceptedThisHour', 'acceptedThisSession', 
-      'declinedThisSession', 'totalAccepted', 'totalDeclined'
+      'declinedThisSession', 'totalAccepted', 'totalDeclined',
+      'hourlyResetTime', 'waitingForHourly', 'lastActivity', 'lastActivityTime'
     ]);
     
     document.getElementById('statAccepted').textContent = data.acceptedThisSession || 0;
     document.getElementById('statDeclined').textContent = data.declinedThisSession || 0;
     
+    // Update timer display
+    updateTimerDisplay(data);
+    
+    // Update last activity display
+    updateLastActivity(data);
+    
     // Also update limits
     updateLimitDisplays();
   } catch (e) {}
+}
+
+// Update last activity display
+function updateLastActivity(data) {
+  const el = document.getElementById('lastActivity');
+  if (!data.lastActivityTime) {
+    el.textContent = 'Never';
+    return;
+  }
+  
+  const lastTime = new Date(data.lastActivityTime);
+  const now = new Date();
+  const diffMs = now - lastTime;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  
+  let timeAgo;
+  if (diffMins < 1) {
+    timeAgo = 'just now';
+  } else if (diffMins < 60) {
+    timeAgo = diffMins + ' min ago';
+  } else if (diffHours < 24) {
+    timeAgo = diffHours + 'h ' + (diffMins % 60) + 'm ago';
+  } else {
+    timeAgo = lastTime.toLocaleDateString() + ' ' + lastTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  }
+  
+  const activity = data.lastActivity || 'Unknown';
+  el.innerHTML = activity + '<br><span style="color:#888;font-size:10px;">' + timeAgo + '</span>';
+}
+
+// Update the timer display
+function updateTimerDisplay(data) {
+  const timerBox = document.getElementById('timerBox');
+  const timerLabel = document.getElementById('timerLabel');
+  const timerValue = document.getElementById('timerValue');
+  
+  const now = Date.now();
+  
+  // Check if waiting for hourly reset (even if browser was closed)
+  if (data.hourlyResetTime && data.hourlyResetTime > now) {
+    timerBox.style.display = 'block';
+    timerBox.className = 'timer-box hourly';
+    if (data.waitingForHourly) {
+      timerLabel.textContent = '⏳ Hourly limit resets in:';
+    } else {
+      timerLabel.textContent = '⏳ Resume after:';
+    }
+    timerValue.textContent = formatTime(data.hourlyResetTime - now);
+    return;
+  }
+  
+  // Check if hourly reset time has passed (clear it)
+  if (data.hourlyResetTime && data.hourlyResetTime <= now) {
+    chrome.storage.local.set({ waitingForHourly: false, hourlyResetTime: 0 });
+  }
+  
+  // Hide timer if nothing to show
+  timerBox.style.display = 'none';
+}
+
+// Format milliseconds to MM:SS or HH:MM:SS
+function formatTime(ms) {
+  if (ms <= 0) return '00:00';
+  
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  if (hours > 0) {
+    return hours.toString().padStart(2, '0') + ':' + 
+           minutes.toString().padStart(2, '0') + ':' + 
+           seconds.toString().padStart(2, '0');
+  }
+  return minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
 }
 
 // Save settings
@@ -93,8 +182,11 @@ function saveSettings() {
     maxSession: parseInt(document.getElementById('maxSession').value) || 0,
     sessionBreakMins: parseInt(document.getElementById('sessionBreakMins').value) || 0,
     filterNonAmerican: document.getElementById('filterNonAmerican').checked,
+    filterHispanic: document.getElementById('filterHispanic').checked,
     filterBrownEmoji: document.getElementById('filterBrownEmoji').checked,
-    humanLikeMouse: document.getElementById('humanLikeMouse').checked
+    humanLikeMouse: document.getElementById('humanLikeMouse').checked,
+    useAI: document.getElementById('useAI').checked,
+    apiKey: document.getElementById('apiKey').value.trim()
   };
   
   chrome.storage.sync.set(settings);
@@ -126,12 +218,19 @@ function sendMessage(action, data = {}) {
 document.getElementById('startBtn').addEventListener('click', async () => {
   const settings = saveSettings();
   
-  // Reset session stats
-  await chrome.storage.local.set({ acceptedThisSession: 0, declinedThisSession: 0 });
-  document.getElementById('statAccepted').textContent = '0';
-  document.getElementById('statDeclined').textContent = '0';
+  // Don't reset session stats - continue from previous
+  // Load current stats to display
+  try {
+    const data = await chrome.storage.local.get(['acceptedThisSession', 'declinedThisSession', 'lastRunStats']);
+    document.getElementById('statAccepted').textContent = data.acceptedThisSession || 0;
+    document.getElementById('statDeclined').textContent = data.declinedThisSession || 0;
+    
+    if (data.lastRunStats) {
+      console.log('Last run:', data.lastRunStats.date, '- Accepted:', data.lastRunStats.accepted, 'Declined:', data.lastRunStats.declined);
+    }
+  } catch (e) {}
   
-  updateStatus('running', 'Starting...');
+  updateStatus('running', 'Continuing...');
   
   try {
     const response = await sendMessage('start', { settings });
@@ -193,10 +292,13 @@ document.getElementById('resetBtn').addEventListener('click', async () => {
       acceptedThisSession: 0, 
       declinedThisSession: 0,
       acceptedThisHour: 0,
-      acceptedToday: 0
+      acceptedToday: 0,
+      waitingForHourly: false,
+      hourlyResetTime: 0
     });
     document.getElementById('statAccepted').textContent = '0';
     document.getElementById('statDeclined').textContent = '0';
+    document.getElementById('timerBox').style.display = 'none';
     updateLimitDisplays();
     updateStatus('stopped', 'All stats reset!');
   } catch (e) {
@@ -321,6 +423,129 @@ document.getElementById('logsBtn').addEventListener('click', async () => {
     }
   } catch (e) {
     updateStatus('error', e.message);
+  }
+});
+
+// Update from GitHub button
+document.getElementById('updateBtn').addEventListener('click', async () => {
+  const confirmed = confirm(
+    '🔄 Update Extension from GitHub?\n\n' +
+    'This will:\n' +
+    '1. Download latest version from GitHub\n' +
+    '2. Show you how to apply the update\n\n' +
+    'Your settings will be preserved.\n\n' +
+    'Continue?'
+  );
+  
+  if (!confirmed) return;
+  
+  updateStatus('running', 'Downloading update...');
+  
+  try {
+    // Download the zip from GitHub
+    const repoUrl = 'https://github.com/mdkdkeooeo-eng/snap-indian/archive/refs/heads/main.zip';
+    
+    // Create a download link
+    const a = document.createElement('a');
+    a.href = repoUrl;
+    a.download = 'snap-filter-update.zip';
+    a.click();
+    
+    // Show instructions
+    setTimeout(() => {
+      alert(
+        '✅ Download started!\n\n' +
+        'To complete the update:\n\n' +
+        'OPTION 1 - Easy (Run Script):\n' +
+        '1. Open the extension folder\n' +
+        '2. Right-click "update.ps1"\n' +
+        '3. Select "Run with PowerShell"\n\n' +
+        'OPTION 2 - Manual:\n' +
+        '1. Extract the downloaded zip\n' +
+        '2. Copy all .js and .html files\n' +
+        '3. Paste into extension folder (replace)\n' +
+        '4. Reload extension in chrome://extensions/\n\n' +
+        'Your settings are saved in browser storage and will persist!'
+      );
+      updateStatus('stopped', 'Update downloaded - follow instructions');
+    }, 1000);
+    
+  } catch (e) {
+    updateStatus('error', 'Update failed: ' + e.message);
+  }
+});
+
+// User Log button - view all accepted/declined usernames
+document.getElementById('userLogBtn').addEventListener('click', async () => {
+  try {
+    const response = await sendMessage('getUserLog');
+    if (response && response.log) {
+      const log = response.log;
+      
+      if (log.length === 0) {
+        updateStatus('stopped', 'No users logged yet');
+        return;
+      }
+      
+      // Format log for display/export
+      let logText = '=== SNAPCHAT USER LOG ===\n';
+      logText += 'Generated: ' + new Date().toLocaleString() + '\n';
+      logText += 'Total entries: ' + log.length + '\n\n';
+      
+      // Count stats
+      const accepted = log.filter(e => e.action === 'accepted').length;
+      const declined = log.filter(e => e.action === 'declined').length;
+      logText += 'Accepted: ' + accepted + '\n';
+      logText += 'Declined: ' + declined + '\n\n';
+      
+      logText += '--- ACCEPTED (username-name) ---\n';
+      log.filter(e => e.action === 'accepted').forEach(e => {
+        const userFormat = e.user || (e.username ? e.username + '-' + e.name : e.name);
+        logText += userFormat + '\n';
+      });
+      
+      logText += '\n--- DECLINED (username-name | reason) ---\n';
+      log.filter(e => e.action === 'declined').forEach(e => {
+        const userFormat = e.user || (e.username ? e.username + '-' + e.name : e.name);
+        logText += userFormat + ' | ' + e.reason + '\n';
+      });
+      
+      logText += '\n--- FULL LOG WITH TIMESTAMPS ---\n';
+      log.forEach(e => {
+        const userFormat = e.user || (e.username ? e.username + '-' + e.name : e.name);
+        const time = e.timestamp ? e.timestamp.split('T')[1].split('.')[0] : '';
+        const date = e.timestamp ? e.timestamp.split('T')[0] : '';
+        logText += date + ' ' + time + ' | ' + e.action.toUpperCase() + ' | ' + userFormat;
+        if (e.reason) logText += ' | ' + e.reason;
+        logText += '\n';
+      });
+      
+      logText += '\n=== END LOG ===';
+      
+      console.log(logText);
+      
+      try {
+        await navigator.clipboard.writeText(logText);
+        updateStatus('stopped', 'User log copied! (' + log.length + ' entries)');
+      } catch (e) {
+        updateStatus('stopped', 'Check console (F12) for log');
+      }
+    }
+  } catch (e) {
+    updateStatus('error', e.message);
+  }
+});
+
+// Clear user log
+document.getElementById('clearLogBtn').addEventListener('click', async () => {
+  if (confirm('Clear all user history? This cannot be undone.')) {
+    try {
+      await sendMessage('clearUserLog');
+      await chrome.storage.local.set({ userLog: [] });
+      updateStatus('stopped', 'User log cleared');
+    } catch (e) {
+      updateStatus('error', e.message);
+    }
   }
 });
 

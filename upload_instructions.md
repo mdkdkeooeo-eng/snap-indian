@@ -67,3 +67,4 @@ You'll need:
 - Target directory path on the server
 - Port number (usually 21 for FTP, 22 for SFTP/SSH)
 
+
