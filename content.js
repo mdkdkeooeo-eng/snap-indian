@@ -103,9 +103,15 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   let isRecordingActions = false;
   let recordedActions = [];
   
-  // Rate limiting counters
-  let acceptedThisSession = 0;
-  let declinedThisSession = 0;
+// Rate limiting counters
+let acceptedThisSession = 0;
+let declinedThisSession = 0;
+
+// Chat mode counters
+let messagesSent = 0;
+let conversationsProcessed = 0;
+let followUpsSent = 0;
+let repliesHandled = 0;
   let acceptedThisHour = 0;
   let acceptedToday = 0;
   let lastHourTimestamp = 0;
@@ -3981,10 +3987,10 @@ SEXUAL:YES`;
     log('Starting chat mode...');
     updateStatus('Chat mode started...', 'running');
 
-    let messagesSent = 0;
-    let conversationsProcessed = 0;
-    let followUpsSent = 0;
-    let repliesHandled = 0;
+    messagesSent = 0;
+    conversationsProcessed = 0;
+    followUpsSent = 0;
+    repliesHandled = 0;
 
     while (isRunning) {
       // FIRST: Check for follow-ups that need to be sent
@@ -4060,7 +4066,6 @@ SEXUAL:YES`;
         const sent = await sendTextMessage(followUpMessage);
         if (sent) {
           await trackFollowUpSent(userId);
-          followUpsSent++;
           log('Follow-up sent: ' + followUpMessage.substring(0, 50));
 
           // Log to database
@@ -4208,6 +4213,186 @@ SEXUAL:YES`;
     log('Chat mode stopped. Messages sent: ' + messagesSent + ', Conversations: ' + conversationsProcessed);
     updateStatus('Chat stopped - Sent: ' + messagesSent + ' messages', 'stopped');
     await clearRunningState(); // Clear state when stopped
+  }
+
+  // Process follow-ups for users who haven't replied
+  async function processFollowUps() {
+    if (!settings.useAIFollowUps && !settings.followUpDelay) return;
+
+    log('Checking for follow-ups...');
+    const data = await chrome.storage.local.get('userTracking');
+    const userTracking = data.userTracking || {};
+
+    for (const [userId, tracking] of Object.entries(userTracking)) {
+      if (!isRunning) break;
+
+      // Check if we should send a follow-up
+      const followUpCheck = await shouldSendFollowUp(
+        userId,
+        settings.followUpDelay || 8,
+        settings.maxFollowUps || 20,
+        settings.followUpOnlyIfNoReply !== false
+      );
+
+      if (followUpCheck.shouldSend) {
+        log('Sending follow-up to: ' + userId);
+
+        // Open conversation
+        const conversation = await findConversationByUserId(userId);
+        if (!conversation) {
+          log('Could not find conversation for follow-up: ' + userId);
+          continue;
+        }
+
+        const opened = await openConversation(conversation);
+        if (!opened) continue;
+
+        // Generate follow-up message
+        let followUpMessage = 'hey, how are you?';
+        if (settings.useAIFollowUps && settings.apiKey) {
+          try {
+            const context = await getConversationContext();
+            followUpMessage = await generateAIFollowUp(userId, context);
+          } catch (e) {
+            log('AI follow-up failed, using default');
+          }
+        }
+
+        // Send follow-up
+        const sent = await sendTextMessage(followUpMessage);
+        if (sent) {
+          await trackFollowUpSent(userId);
+          log('Follow-up sent: ' + followUpMessage.substring(0, 50));
+
+          // Log to database
+          if (typeof window.logMessage === 'function') {
+            await window.logMessage(userId, 'followup', followUpMessage, true).catch(e => console.error('[SF] DB log error:', e));
+          }
+        }
+
+        // Small delay between follow-ups
+        await delay(2000);
+      }
+    }
+  }
+
+  // Process replies from users and respond appropriately
+  async function processReplies() {
+    log('Checking for replies...');
+
+    // Find conversations that might have replies
+    const conversations = findConversations();
+    for (const conv of conversations) {
+      if (!isRunning) break;
+
+      // Open conversation to check for replies
+      const opened = await openConversation(conv);
+      if (!opened) continue;
+
+      const userId = await getCurrentConversationUserId();
+      if (!userId) continue;
+
+      // Check if user replied since our last message
+      const hasNewReply = await checkForNewReply(userId);
+      if (hasNewReply) {
+        log('Found reply from: ' + userId);
+
+        // Read conversation context
+        const conversationHistory = await getConversationContext();
+
+        // Track the reply
+        await trackReplyReceived(userId);
+
+        // Generate response based on conversation state
+        const responseText = await generateReplyResponse(userId, conversationHistory);
+
+        // Send response
+        const sent = await sendTextMessage(responseText);
+        if (sent) {
+          log('Reply sent: ' + responseText.substring(0, 50));
+
+          // Log to database
+          if (typeof window.logMessage === 'function') {
+            await window.logMessage(userId, 'reply', responseText, true).catch(e => console.error('[SF] DB log error:', e));
+          }
+        }
+
+        // Delay between replies
+        await delay(3000);
+      }
+    }
+  }
+
+  // Send new messages to users who haven't been messaged yet
+  async function sendNewMessages() {
+    log('Checking for new conversations to message...');
+
+    // Find conversations
+    const conversations = findConversations();
+    if (conversations.length === 0) {
+      return;
+    }
+
+    for (const conv of conversations) {
+      if (!isRunning) break;
+
+      // Open conversation
+      const opened = await openConversation(conv);
+      if (!opened) continue;
+
+      const userId = await getCurrentConversationUserId();
+      if (!userId) continue;
+
+      // Check if we've already messaged this user
+      if (await hasBeenMessaged(userId)) continue;
+
+      // Generate initial message
+      const messagePlan = await getNextMessagePlan(userId);
+      if (!messagePlan) continue;
+
+      let messageText = messagePlan.message;
+      if (settings.useAIOpener && settings.apiKey) {
+        try {
+          messageText = await generateAIOpener(userId);
+        } catch (e) {
+          log('AI opener failed, using default');
+        }
+      }
+
+      // Check if we should send a photo with this message
+      const photoCheck = await shouldSendPhotoBasedOnPhase(userId, 0);
+      if (photoCheck.shouldSend) {
+        log('Sending photo: ' + photoCheck.reason);
+        const photoResult = await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
+        if (photoResult && photoResult.success && typeof window.logPhotoSent === 'function') {
+          await window.logPhotoSent(userId, photoResult.photoId || '', photoResult.category || 'main', photoResult.caption || '').catch(e => console.error('[SF] DB log error:', e));
+        }
+        await delay(2000);
+      }
+
+      // Send message
+      const sent = await sendTextMessage(messageText);
+      if (sent) {
+        await trackMessageSent(userId, messageText);
+        await markUserAsMessaged(userId);
+        log('Message sent to ' + userId + ': ' + messageText.substring(0, 50));
+
+        // Log to database
+        if (typeof window.logMessage === 'function') {
+          await window.logMessage(userId, messagePlan.type, messageText, true).catch(e => console.error('[SF] DB log error:', e));
+        }
+        if (typeof window.logConversation === 'function') {
+          await window.logConversation(userId, userId, conv?.name || '', 'messaged').catch(e => console.error('[SF] DB log error:', e));
+        }
+      }
+
+      // Delay before next conversation
+      await delay(2000);
+    }
+
+    // Scroll to find more conversations
+    window.scrollBy(0, 400);
+    await delay(2000);
   }
   
   async function runFriendAdding() {

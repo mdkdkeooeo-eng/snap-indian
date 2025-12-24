@@ -101,16 +101,6 @@ function executeQuery(store, operation, ...args) {
   });
 }
 
-// Get current session ID
-function getSessionId() {
-  const data = chrome.storage.local.get(['currentSessionId']);
-  if (!data.currentSessionId) {
-    const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    chrome.storage.local.set({ currentSessionId: sessionId });
-    return sessionId;
-  }
-  return data.currentSessionId;
-}
 
 // Get PST date string
 function getPSTDate() {
