@@ -18,11 +18,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' });
     if (response && response.loaded) {
       updateStatus('stopped', 'Ready! Open panel to configure.');
+    } else {
+      updateStatus('error', 'Content script not responding. Please refresh the page.');
     }
   } catch (e) {
-    // Try to inject (content script should auto-load, but if needed)
-    // Note: Content scripts are auto-injected via manifest, so this shouldn't be needed
-    updateStatus('error', 'Content script not loaded. Please refresh the Snapchat page.');
+    // Try to inject content script manually if auto-injection failed
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        files: ['database.js', 'content.js']
+      });
+      // Wait a bit for scripts to initialize
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // Try pinging again
+      try {
+        const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' });
+        if (response && response.loaded) {
+          updateStatus('stopped', 'Ready! Open panel to configure.');
+        } else {
+          updateStatus('error', 'Content script loaded but not responding. Please refresh the page.');
+        }
+      } catch (e2) {
+        updateStatus('error', 'Content script not working. Please refresh the Snapchat page.');
+      }
+    } catch (injectError) {
+      updateStatus('error', 'Failed to load content script. Please refresh the Snapchat page.');
+      console.error('Injection error:', injectError);
+    }
   }
 });
 

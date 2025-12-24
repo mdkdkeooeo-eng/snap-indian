@@ -36,6 +36,12 @@ window.toggleSection = function(sectionId) {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Panel loaded');
   
+  // Attach database button handlers
+  document.getElementById('refreshDbStatsBtn')?.addEventListener('click', refreshDbStats);
+  document.getElementById('exportDbBtn')?.addEventListener('click', exportDatabase);
+  document.getElementById('viewDbBtn')?.addEventListener('click', viewDatabase);
+  document.getElementById('clearDbBtn')?.addEventListener('click', clearDatabase);
+  
   // Load all settings
   try {
     const s = await chrome.storage.sync.get({

@@ -1,11 +1,6 @@
 // SQL-like Database for logging - Uses IndexedDB
 // Stores all bot activity: accepted/declined friends, conversations, messages, etc.
 
-// Make functions available globally for content.js
-if (typeof window === 'undefined') {
-  var window = globalThis;
-}
-
 let db = null;
 const DB_NAME = 'snapchat_bot_db';
 const DB_VERSION = 1;
@@ -483,31 +478,37 @@ async function exportDatabase() {
   }
 }
 
-// Export database functions globally for content.js access
-if (typeof window !== 'undefined') {
-  window.initDatabase = initDatabase;
-  window.logFriendRequest = logFriendRequest;
-  window.logFriendAdd = logFriendAdd;
-  window.logConversation = logConversation;
-  window.logMessage = logMessage;
-  window.logPhotoSent = logPhotoSent;
-  window.query = query;
-  window.getStats = getStats;
-  window.exportDatabase = exportDatabase;
-}
+  // Export database functions globally for content.js access
+  if (typeof window !== 'undefined') {
+    try {
+      window.initDatabase = initDatabase;
+      window.logFriendRequest = logFriendRequest;
+      window.logFriendAdd = logFriendAdd;
+      window.logConversation = logConversation;
+      window.logMessage = logMessage;
+      window.logPhotoSent = logPhotoSent;
+      window.query = query;
+      window.getStats = getStats;
+      window.exportDatabase = exportDatabase;
+      console.log('[DB] Database functions exported to window');
+    } catch (e) {
+      console.error('[DB] Error exporting functions:', e);
+    }
+  }
 
-// Also export for Node.js/CommonJS if needed
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    initDatabase,
-    logFriendRequest,
-    logFriendAdd,
-    logConversation,
-    logMessage,
-    logPhotoSent,
-    query,
-    getStats,
-    exportDatabase
-  };
-}
+  // Also export for Node.js/CommonJS if needed
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      initDatabase,
+      logFriendRequest,
+      logFriendAdd,
+      logConversation,
+      logMessage,
+      logPhotoSent,
+      query,
+      getStats,
+      exportDatabase
+    };
+  }
+})(); // Close the IIFE
 
