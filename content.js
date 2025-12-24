@@ -2731,7 +2731,13 @@ SEXUAL:YES`;
   }
   
   async function run() {
-    if (!isRunning) return;
+    console.log('[SF] run() called, isRunning:', isRunning);
+    if (!isRunning) {
+      console.log('[SF] Not running, returning early');
+      return;
+    }
+    
+    console.log('[SF] Starting run function...');
     
     // Check if we were waiting for hourly reset (browser was closed)
     const stillWaiting = await checkPendingHourlyReset();
@@ -2764,20 +2770,21 @@ SEXUAL:YES`;
     } catch (e) {}
     
     // Session break - only if sessionBreakMins is set to a value > 0
-    // If set to 0, no break is required
-    if (settings.sessionBreakMins && settings.sessionBreakMins > 0 && lastSessionEnd > 0) {
+    // If set to 0, no break is required (handle both string "0" and number 0)
+    const sessionBreakMins = parseInt(settings.sessionBreakMins) || 0;
+    console.log('[SF] Session break setting:', sessionBreakMins, '(0 = disabled)');
+    
+    if (sessionBreakMins > 0 && lastSessionEnd > 0) {
       const minsSinceLastSession = (Date.now() - lastSessionEnd) / (60 * 1000);
-      if (minsSinceLastSession < settings.sessionBreakMins) {
-        const waitMins = Math.ceil(settings.sessionBreakMins - minsSinceLastSession);
+      if (minsSinceLastSession < sessionBreakMins) {
+        const waitMins = Math.ceil(sessionBreakMins - minsSinceLastSession);
         console.log('⚠ Session break required. Wait', waitMins, 'more minutes.');
         updateStatus('Session break - wait ' + waitMins + ' mins');
         isRunning = false;
         return;
       }
-    }
-    
-    // If sessionBreakMins is 0 or not set, skip break entirely
-    if (settings.sessionBreakMins === 0 || !settings.sessionBreakMins) {
+    } else {
+      // Session break disabled (0 or not set) - continue immediately
       console.log('Session break disabled (set to 0) - continuing immediately');
     }
     
@@ -2787,14 +2794,21 @@ SEXUAL:YES`;
     // processed.clear();
     
     // Check which mode we're in
-    if (settings.friendsAddEnabled && settings.autoAddFriends) {
-      // Friend adding mode
+    console.log('[SF] Mode check - friendsAddEnabled:', settings.friendsAddEnabled, 'autoAddFriends:', settings.autoAddFriends, 'chatEnabled:', settings.chatEnabled);
+    
+    // If "Auto-add friends from Quick Add" is enabled, start friend adding mode
+    // This is the main trigger - if autoAddFriends is on, it will start when you hit start
+    if (settings.autoAddFriends) {
+      // Friend adding mode - autoAddFriends enabled means start friend adding
+      console.log('[SF] Starting friend adding mode (autoAddFriends enabled)...');
+      updateStatus('Starting friend adding...', 'running');
       await runFriendAdding();
       isRunning = false;
       return;
     }
     
-    // Friend request filtering mode (existing code)
+    // Friend request filtering mode (existing code) - runs when autoAddFriends is disabled
+    console.log('[SF] Starting friend request filtering mode (autoAddFriends disabled)...');
     let entries = findEntries();
     if (entries.length === 0) {
       await openFriendRequests();
@@ -2977,9 +2991,19 @@ SEXUAL:YES`;
         return true;
       }
       settings = msg.settings;
+      if (!settings) {
+        console.error('[SF] No settings provided!');
+        respond({ success: false, error: 'No settings provided' });
+        return true;
+      }
+      console.log('[SF] Starting with settings:', Object.keys(settings));
       isRunning = true;
       processed.clear();
-      run();
+      run().catch(err => {
+        console.error('[SF] Error in run():', err);
+        isRunning = false;
+        updateStatus('Error: ' + err.message, 'error');
+      });
       respond({ success: true });
       return true;
     }

@@ -568,7 +568,10 @@ function getChecked(id) {
 }
 
 function getInt(id, def) {
-  return parseInt(getVal(id)) || def;
+  const val = getVal(id);
+  if (val === '' || val === null || val === undefined) return def;
+  const parsed = parseInt(val);
+  return isNaN(parsed) ? def : parsed;
 }
 
 // Copy to clipboard with fallbacks
