@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Chat Settings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #E91E63;
+      margin-bottom: 20px;
+      font-size: 28px;
+    }
+    h1 span { color: #fff; }
+    h2 {
+      color: #E91E63;
+      font-size: 16px;
+      margin: 20px 0 10px 0;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #333;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .row {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .field {
+      flex: 1;
+    }
+    label {
+      display: block;
+      color: #aaa;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 14px;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #E91E63;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .checkbox {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .checkbox input {
+      margin-right: 10px;
+      width: 18px;
+      height: 18px;
+      accent-color: #E91E63;
+    }
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .toggle-row label {
+      margin: 0;
+      color: #fff;
+      font-size: 14px;
+    }
+    .switch {
+      position: relative;
+      width: 50px;
+      height: 26px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #333;
+      transition: .3s;
+      border-radius: 26px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #fff;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #E91E63;
+    }
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+    .conditional {
+      margin-left: 30px;
+      padding: 10px;
+      background: rgba(233,30,99,0.1);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .conditional.show {
+      display: block;
+    }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #E91E63 0%, #C2185B 100%);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(233,30,99,0.4);
+    }
+    .btn-secondary {
+      background: #333;
+      color: #fff;
+    }
+    .btn-secondary:hover {
+      background: #444;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    .range-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    input[type="range"] {
+      flex: 1;
+      accent-color: #E91E63;
+    }
+    .range-value {
+      background: #E91E63;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      min-width: 30px;
+      text-align: center;
+    }
+    .tag-input {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid #444;
+      border-radius: 6px;
+      min-height: 40px;
+    }
+    .tag {
+      background: #E91E63;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tag .remove {
+      cursor: pointer;
+      opacity: 0.7;
+    }
+    .tag .remove:hover {
+      opacity: 1;
+    }
+    .tag-input input {
+      border: none;
+      background: transparent;
+      flex: 1;
+      min-width: 100px;
+      padding: 4px;
+    }
+    .warning-box {
+      background: rgba(255,152,0,0.2);
+      border: 1px solid #FF9800;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .warning-box h3 {
+      color: #FF9800;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .warning-box p {
+      font-size: 13px;
+      color: #ddd;
+      line-height: 1.5;
+    }
+    .test-area {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    .chat-bubble {
+      padding: 12px 16px;
+      border-radius: 18px;
+      margin-bottom: 10px;
+      max-width: 80%;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .chat-bubble.them {
+      background: #333;
+      border-bottom-left-radius: 4px;
+    }
+    .chat-bubble.me {
+      background: #E91E63;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .status-indicator.active { background: #4CAF50; }
+    .status-indicator.inactive { background: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>💬 <span>AI Chat</span> Settings</h1>
+    
+    <div class="warning-box">
+      <h3>🔒 Privacy & Behavior Guarantee</h3>
+      <p>This AI will <strong>NEVER</strong> admit it's an AI, refuse topics, or say "let's change the subject." 
+      It will always stay in character and go with the conversation naturally, no matter the topic. 
+      Your persona details help it respond authentically as YOU.</p>
+    </div>
+    
+    <!-- Master Controls -->
+    <div class="card">
+      <h2>⚡ Quick Controls</h2>
+      <div class="toggle-row">
+        <label><span class="status-indicator" id="statusIndicator"></span> AI Chat Enabled</label>
+        <label class="switch">
+          <input type="checkbox" id="aiEnabled" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <label>Auto-Reply on Home Page</label>
+        <label class="switch">
+          <input type="checkbox" id="autoReplyHome">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <label>Allow Explicit/Adult Content</label>
+        <label class="switch">
+          <input type="checkbox" id="allowExplicit" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+    
+    <!-- Basic Info -->
+    <div class="card">
+      <h2>👤 Your Persona</h2>
+      <div class="row">
+        <div class="field">
+          <label>Display Name</label>
+          <input type="text" id="personaName" placeholder="Your name/alias">
+        </div>
+        <div class="field">
+          <label>Age</label>
+          <input type="number" id="personaAge" value="22" min="18" max="99">
+        </div>
+      </div>
+      <div class="field">
+        <label>Short Bio (how you'd describe yourself)</label>
+        <textarea id="personaBio" placeholder="e.g., college student who loves fitness and late night adventures..."></textarea>
+      </div>
+      <div class="field">
+        <label>Location (city/area)</label>
+        <input type="text" id="personaLocation" placeholder="e.g., LA, Miami, NYC">
+      </div>
+    </div>
+    
+    <!-- Personality -->
+    <div class="card">
+      <h2>🎭 Personality & Style</h2>
+      <div class="row">
+        <div class="field">
+          <label>Personality Preset</label>
+          <select id="personalityPreset">
+            <option value="girlfriend">Girlfriend Experience</option>
+            <option value="spicy" selected>Spicy & Flirty</option>
+            <option value="dominant">Dominant</option>
+            <option value="submissive">Submissive</option>
+            <option value="bratty">Bratty</option>
+            <option value="sweet">Sweet & Innocent</option>
+            <option value="mysterious">Mysterious</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Response Length</label>
+          <select id="responseLength">
+            <option value="short">Short (1-2 sentences)</option>
+            <option value="medium" selected>Medium (2-4 sentences)</option>
+            <option value="long">Long (paragraph)</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label>Flirt Level</label>
+        <div class="range-container">
+          <span>Mild</span>
+          <input type="range" id="flirtLevel" min="1" max="10" value="7">
+          <span>Spicy</span>
+          <span class="range-value" id="flirtValue">7</span>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label>Emoji Usage</label>
+        <div class="range-container">
+          <span>None</span>
+          <input type="range" id="emojiLevel" min="0" max="3" value="2">
+          <span>Heavy</span>
+          <span class="range-value" id="emojiValue">2</span>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label>Custom Traits (comma-separated)</label>
+        <input type="text" id="customTraits" placeholder="e.g., playful, teasing, confident, caring">
+      </div>
+    </div>
+    
+    <!-- Physical Details -->
+    <div class="card">
+      <h2>💅 Physical Details</h2>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="hasTattoos">
+        I have tattoos
+      </label>
+      <div class="conditional" id="tattoosDetails">
+        <label>Describe your tattoos</label>
+        <textarea id="tattooDesc" placeholder="e.g., small rose on my hip, sleeve on left arm, butterfly on ankle..."></textarea>
+      </div>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="hasPiercings">
+        I have piercings
+      </label>
+      <div class="conditional" id="piercingsDetails">
+        <label>Describe your piercings</label>
+        <textarea id="piercingDesc" placeholder="e.g., belly button, nose stud, multiple ear piercings..."></textarea>
+      </div>
+      
+      <div class="row">
+        <div class="field">
+          <label>Hair Color</label>
+          <input type="text" id="hairColor" placeholder="e.g., blonde, brunette, red">
+        </div>
+        <div class="field">
+          <label>Eye Color</label>
+          <input type="text" id="eyeColor" placeholder="e.g., blue, green, brown">
+        </div>
+      </div>
+      
+      <div class="field">
+        <label>Body Type</label>
+        <select id="bodyType">
+          <option value="">-- Select --</option>
+          <option value="petite">Petite</option>
+          <option value="slim">Slim</option>
+          <option value="athletic">Athletic/Fit</option>
+          <option value="curvy">Curvy</option>
+          <option value="thick">Thick</option>
+          <option value="bbw">BBW</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Interests & Hobbies -->
+    <div class="card">
+      <h2>🎮 Interests & Hobbies</h2>
+      
+      <div class="field">
+        <label>Hobbies (comma-separated)</label>
+        <input type="text" id="hobbies" placeholder="e.g., gym, yoga, reading, cooking, traveling">
+      </div>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="playsGames">
+        I play video games
+      </label>
+      <div class="conditional" id="gamesDetails">
+        <label>What games do you play?</label>
+        <input type="text" id="gamesList" placeholder="e.g., Fortnite, COD, Valorant, GTA, Minecraft">
+      </div>
+      
+      <div class="field">
+        <label>Favorite Music</label>
+        <input type="text" id="musicTaste" placeholder="e.g., rap, pop, r&b, country, edm">
+      </div>
+      
+      <div class="field">
+        <label>Favorite Shows/Movies</label>
+        <input type="text" id="showsMovies" placeholder="e.g., Netflix, reality TV, horror movies">
+      </div>
+    </div>
+    
+    <!-- Conversation Style -->
+    <div class="card">
+      <h2>💬 Conversation Behavior</h2>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="askQuestions" checked>
+        Ask questions back to keep convo going
+      </label>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="useSlang" checked>
+        Use casual slang (lol, omg, ngl, etc.)
+      </label>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="beMysterious" checked>
+        Be a little mysterious/hard to get
+      </label>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="mentionContent" checked>
+        Naturally mention content/PPV when appropriate
+      </label>
+      
+      <div class="field">
+        <label>Pet Names to Use</label>
+        <input type="text" id="petNames" placeholder="e.g., babe, baby, hun, cutie, handsome">
+      </div>
+      
+      <div class="field">
+        <label>Topics to Avoid (if any)</label>
+        <input type="text" id="avoidTopics" placeholder="e.g., politics, religion, personal address">
+      </div>
+    </div>
+    
+    <!-- Upselling -->
+    <div class="card">
+      <h2>💰 Content Promotion</h2>
+      
+      <label class="checkbox">
+        <input type="checkbox" id="enableUpsell" checked>
+        Enable natural upselling/PPV mentions
+      </label>
+      
+      <div class="field">
+        <label>PPV/Content Description</label>
+        <textarea id="contentDesc" placeholder="Describe your content style so AI can tease it naturally..."></textarea>
+      </div>
+      
+      <div class="field">
+        <label>Price Range to Mention</label>
+        <input type="text" id="priceRange" placeholder="e.g., $5-20, $10-50">
+      </div>
+    </div>
+    
+    <!-- Test Chat -->
+    <div class="card">
+      <h2>🧪 Test Your AI</h2>
+      <div class="test-area">
+        <div id="chatHistory">
+          <div class="chat-bubble them">hey beautiful 😍</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:15px;">
+          <input type="text" id="testInput" placeholder="Type a test message..." style="flex:1;">
+          <button class="btn btn-primary" id="sendTestBtn">Send</button>
+        </div>
+        <div id="aiResponse" style="margin-top:10px;display:none;"></div>
+      </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="resetBtn">Reset to Defaults</button>
+      <button class="btn btn-secondary" id="exportBtn">Export Settings</button>
+      <button class="btn btn-primary" id="saveBtn">💾 Save Settings</button>
+    </div>
+  </div>
+  
+  <script src="ai-chat-popup.js"></script>
+</body>
+</html>
+

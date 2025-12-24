@@ -42,7 +42,7 @@
       font-size: 11px;
       margin-bottom: 3px;
     }
-    input[type="number"] {
+    input[type="number"], input[type="text"], input[type="password"], textarea, select {
       width: 100%;
       padding: 8px;
       border: 1px solid #444;
@@ -51,7 +51,11 @@
       color: #fff;
       font-size: 13px;
     }
-    input:focus {
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    input:focus, textarea:focus, select:focus {
       outline: none;
       border-color: #FFFC00;
     }
@@ -65,6 +69,7 @@
       margin-right: 8px;
       width: 16px;
       height: 16px;
+      accent-color: #FFFC00;
     }
     button {
       width: 100%;
@@ -84,6 +89,197 @@
     .btn-secondary { background: #333; color: #fff; }
     .btn-secondary:hover { background: #444; }
     .btn-small { padding: 8px; font-size: 12px; }
+    
+    /* Main Mode Switches */
+    .mode-switches {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid #333;
+    }
+    .mode-switch {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+      border-radius: 8px;
+      background: #1a1a1a;
+      border: 2px solid #333;
+      transition: all 0.3s;
+    }
+    .mode-switch.active {
+      border-color: #FFFC00;
+      background: rgba(255, 252, 0, 0.1);
+    }
+    .mode-switch .mode-icon {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .mode-switch .mode-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #888;
+      margin-bottom: 5px;
+    }
+    .mode-switch.active .mode-label {
+      color: #FFFC00;
+    }
+    .mode-switch .mode-status {
+      font-size: 10px;
+      color: #4CAF50;
+    }
+    .mode-switch:not(.active) .mode-status {
+      color: #666;
+    }
+    
+    /* Collapsible sections */
+    .section {
+      background: #222;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      background: #2a2a2a;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-header:hover {
+      background: #333;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .section-title .icon {
+      margin-right: 8px;
+    }
+    .section-toggle {
+      color: #888;
+      font-size: 12px;
+      transition: transform 0.3s;
+    }
+    .section.collapsed .section-toggle {
+      transform: rotate(-90deg);
+    }
+    .section-content {
+      padding: 15px;
+      display: block;
+    }
+    .section.collapsed .section-content {
+      display: none;
+    }
+    
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+    .toggle-row label {
+      margin: 0;
+      color: #fff;
+      font-size: 13px;
+    }
+    .switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #444;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #fff;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #FFFC00;
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    
+    /* Conditional/nested fields */
+    .conditional {
+      margin-left: 24px;
+      padding: 10px;
+      background: rgba(255,252,0,0.05);
+      border-radius: 4px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .conditional.show {
+      display: block;
+    }
+    
+    /* Button groups */
+    .btn-group {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    .btn-group button {
+      flex: 1;
+      margin: 0;
+      padding: 8px 4px;
+      font-size: 11px;
+      background: #333;
+      border: 1px solid #444;
+    }
+    .btn-group button.active {
+      background: #FFFC00;
+      color: #000;
+      border-color: #FFFC00;
+    }
+    
+    /* Range slider */
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    input[type="range"] {
+      flex: 1;
+      accent-color: #FFFC00;
+    }
+    .range-value {
+      background: #FFFC00;
+      color: #000;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      min-width: 25px;
+      text-align: center;
+    }
     
     /* Stats boxes */
     .stats-grid {
@@ -217,12 +413,319 @@
       color: #666;
       margin-top: 2px;
     }
+    
+    /* Objection item */
+    .objection-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .objection-item label {
+      margin: 0;
+      color: #fff;
+      font-size: 12px;
+    }
+    
+    /* Phase cards */
+    .phase-card {
+      background: #2a2a2a;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-left: 3px solid #9C27B0;
+    }
+    .phase-title {
+      font-weight: 600;
+      color: #9C27B0;
+      margin-bottom: 8px;
+    }
+    
+    /* Anti-bot info box */
+    .antibot-box {
+      background: linear-gradient(135deg, rgba(76,175,80,0.1) 0%, rgba(33,150,243,0.1) 100%);
+      border: 1px solid #4CAF50;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .antibot-title {
+      color: #4CAF50;
+      font-weight: 600;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .antibot-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+    .antibot-item .check {
+      color: #4CAF50;
+    }
+    
+    /* Status Legend */
+    .status-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      padding: 10px;
+      background: #222;
+      border-radius: 8px;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: #aaa;
+    }
+    .status-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 10px;
+    }
+    .status-icon.yellow { background: #FFD700; color: #000; }
+    .status-icon.white { background: #fff; color: #000; }
+    .status-icon.blue { background: #2196F3; color: #fff; }
+    .status-icon.blue-heart { background: transparent; color: #2196F3; font-size: 14px; }
+    .status-icon.red-heart { background: transparent; color: #f44336; font-size: 14px; }
+    .status-icon.green-heart { background: transparent; color: #4CAF50; font-size: 14px; }
+    
+    /* Analytics table */
+    .analytics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .analytics-table th {
+      text-align: left;
+      color: #888;
+      font-weight: 500;
+      padding: 8px 10px;
+      border-bottom: 1px solid #333;
+    }
+    .analytics-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .analytics-table tr:hover {
+      background: rgba(255,252,0,0.05);
+    }
+    .metric-name {
+      color: #fff;
+    }
+    .metric-today {
+      color: #FFFC00;
+      font-weight: 600;
+    }
+    .metric-total {
+      color: #888;
+    }
+    .metric-percent {
+      color: #4CAF50;
+      font-size: 10px;
+    }
+    
+    /* Conversation list */
+    .convo-list {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #1a1a1a;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+    .convo-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-bottom: 1px solid #2a2a2a;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .convo-item:hover {
+      background: #2a2a2a;
+    }
+    .convo-status {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .convo-name {
+      flex: 1;
+      font-size: 12px;
+      color: #fff;
+    }
+    .convo-time {
+      font-size: 10px;
+      color: #666;
+    }
+    .convo-exchanges {
+      font-size: 10px;
+      color: #888;
+      background: #333;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    
+    /* Conversation detail popup */
+    .convo-detail {
+      position: fixed;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      z-index: 1000;
+      min-width: 280px;
+      font-size: 11px;
+    }
+    .convo-detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .convo-detail-label {
+      color: #888;
+    }
+    .convo-detail-value {
+      color: #fff;
+    }
+    .convo-detail-value.success { color: #4CAF50; }
+    .convo-detail-value.failed { color: #f44336; }
+    .convo-detail-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .convo-detail-actions button {
+      flex: 1;
+      padding: 6px;
+      font-size: 11px;
+      margin: 0;
+    }
+    .btn-exclude { background: #f44336; }
+    .btn-converted { background: #4CAF50; }
+    
+    /* Photo management */
+    .photo-item {
+      background: #2a2a2a;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #333;
+    }
+    .photo-preview {
+      width: 100%;
+      max-width: 200px;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .photo-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .photo-category {
+      background: #9C27B0;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .photo-category.main { background: #2196F3; }
+    .photo-category.sexy { background: #E91E63; }
+    .photo-category.sad { background: #666; }
+    .photo-category.pose { background: #FF9800; }
+    .photo-actions {
+      display: flex;
+      gap: 5px;
+    }
+    .photo-actions button {
+      padding: 4px 8px;
+      font-size: 10px;
+      margin: 0;
+      flex: 1;
+    }
+    .photo-description {
+      width: 100%;
+      padding: 6px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 11px;
+      resize: vertical;
+      min-height: 40px;
+    }
+    .photo-description:focus {
+      outline: none;
+      border-color: #FFFC00;
+    }
+    .photo-stats {
+      font-size: 10px;
+      color: #888;
+      margin-top: 5px;
+    }
+    .photo-category-select {
+      background: #333 !important;
+      color: #fff !important;
+      border: 1px solid #444 !important;
+      padding: 4px 8px !important;
+      border-radius: 4px !important;
+      font-size: 11px !important;
+      cursor: pointer;
+    }
+    .photo-category-select:hover {
+      border-color: #FFFC00 !important;
+    }
   </style>
 </head>
 <body>
   <button class="close-btn" id="closeBtn">×</button>
   <div class="panel">
     <h1>Snapchat Friend Filter</h1>
+    
+    <!-- ========== MAIN MODE SWITCHES ========== -->
+    <div class="mode-switches">
+      <div class="mode-switch active" id="modeFriendsAdd" onclick="toggleMode('friendsAdd')">
+        <span class="mode-icon">👥</span>
+        <span class="mode-label">Friends Add</span>
+        <label class="switch" style="margin:0;">
+          <input type="checkbox" id="friendsAddEnabled" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="mode-switch active" id="modeChat" onclick="toggleMode('chat')">
+        <span class="mode-icon">💬</span>
+        <span class="mode-label">Chat</span>
+        <label class="switch" style="margin:0;">
+          <input type="checkbox" id="chatEnabled" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
     
     <!-- Session Stats -->
     <div class="stats-grid">
@@ -261,7 +764,988 @@
       <div class="activity-value" id="lastActivity">Never</div>
     </div>
     
-    <h2>Rate Limits</h2>
+    <!-- ========== ANALYTICS SECTION ========== -->
+    <div class="section" id="sectionAnalytics">
+      <div class="section-header" onclick="toggleSection('sectionAnalytics')">
+        <span class="section-title"><span class="icon">📊</span>Analytics & Conversations</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <!-- Status Legend -->
+        <div class="status-legend">
+          <div class="status-item">
+            <span class="status-icon yellow">💬</span>
+            <span>Not messaged</span>
+          </div>
+          <div class="status-item">
+            <span class="status-icon white">💬</span>
+            <span>Sent, no reply</span>
+          </div>
+          <div class="status-item">
+            <span class="status-icon blue">💬</span>
+            <span>First reply</span>
+          </div>
+          <div class="status-item">
+            <span class="status-icon blue-heart">💙</span>
+            <span>CTA started</span>
+          </div>
+          <div class="status-item">
+            <span class="status-icon red-heart">❤️</span>
+            <span>CTA failed</span>
+          </div>
+          <div class="status-item">
+            <span class="status-icon green-heart">💚</span>
+            <span>Converted!</span>
+          </div>
+        </div>
+        
+        <!-- Analytics Table -->
+        <table class="analytics-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Today</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="metric-name">Conversations Started</td>
+              <td class="metric-today" id="statConvosToday">0</td>
+              <td class="metric-total" id="statConvosTotal">0</td>
+            </tr>
+            <tr>
+              <td class="metric-name">Messages Sent</td>
+              <td class="metric-today" id="statMsgsToday">0</td>
+              <td class="metric-total" id="statMsgsTotal">0</td>
+            </tr>
+            <tr>
+              <td class="metric-name">Replies Received</td>
+              <td class="metric-today" id="statRepliesText">0</td>
+              <td class="metric-total" id="statRepliesTotal">0</td>
+            </tr>
+            <tr>
+              <td class="metric-name">CTA Phase Started</td>
+              <td class="metric-today" id="statCTAStartedToday">0</td>
+              <td class="metric-total" id="statCTAStartedTotal">0 <span class="metric-percent" id="statCTAPercent"></span></td>
+            </tr>
+            <tr>
+              <td class="metric-name">CTA Link Shared</td>
+              <td class="metric-today" id="statCTASharedToday">0</td>
+              <td class="metric-total" id="statCTASharedTotal">0</td>
+            </tr>
+            <tr>
+              <td class="metric-name">CTA Failed</td>
+              <td class="metric-today" id="statCTAFailedToday">0</td>
+              <td class="metric-total" id="statCTAFailedTotal">0</td>
+            </tr>
+            <tr>
+              <td class="metric-name">Conversions 🎉</td>
+              <td class="metric-today" style="color:#4CAF50;" id="statConversionsToday">0</td>
+              <td class="metric-total" id="statConversionsTotal">0 <span class="metric-percent" id="statConversionPercent"></span></td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <!-- CTA Settings -->
+        <h2 style="margin-top:15px;">CTA Attempts</h2>
+        <div class="row">
+          <div class="field">
+            <label>Max CTA attempts before fail</label>
+            <input type="number" id="maxCTAAttempts" value="3" min="1" max="10">
+          </div>
+          <div class="field">
+            <label>Stop messaging after fail</label>
+            <label class="switch" style="margin-top:10px;">
+              <input type="checkbox" id="stopAfterCTAFail" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Success Detection -->
+        <h2>Success Detection Keywords</h2>
+        <div class="field">
+          <label>Keywords that indicate conversion (comma-separated)</label>
+          <input type="text" id="successKeywords" value="signed up, subscribed, just subbed, messaged u, dm'd you, sent you a message, purchased, bought" placeholder="signed up, subscribed, messaged u...">
+        </div>
+        
+        <!-- Recent Conversations -->
+        <h2>Recent Conversations</h2>
+        <div class="convo-list" id="convoList">
+          <div class="convo-item" style="color:#666;justify-content:center;">
+            No conversations tracked yet
+          </div>
+        </div>
+        
+        <button class="btn-secondary btn-small" id="refreshConvosBtn" style="margin-top:8px;">🔄 Refresh</button>
+      </div>
+    </div>
+    
+    <!-- ========== FRIENDS ADD/REMOVE SECTION ========== -->
+    <div class="section" id="sectionFriendsAdd">
+      <div class="section-header" onclick="toggleSection('sectionFriendsAdd')">
+        <span class="section-title"><span class="icon">👥</span>Friends Add / Remove</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="toggle-row">
+          <label>Auto-add friends from Quick Add</label>
+          <label class="switch">
+            <input type="checkbox" id="autoAddFriends">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Auto-accept incoming requests</label>
+          <label class="switch">
+            <input type="checkbox" id="autoAcceptRequests">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Remove non-responders after X days</label>
+          <label class="switch">
+            <input type="checkbox" id="removeNonResponders">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="conditional show" id="removeAfterDaysDetails">
+          <div class="row">
+            <div class="field">
+              <label>Days before remove</label>
+              <input type="number" id="removeAfterDays" value="7" min="1">
+            </div>
+            <div class="field">
+              <label>Min messages before remove check</label>
+              <input type="number" id="minMessagesBeforeRemove" value="2" min="0">
+            </div>
+          </div>
+        </div>
+        
+        <h2 style="margin-top:15px;">Friend Add Delays</h2>
+        <div class="row">
+          <div class="field">
+            <label>Min delay between adds (sec)</label>
+            <input type="number" id="friendAddMinDelay" value="30" min="5">
+          </div>
+          <div class="field">
+            <label>Max delay between adds (sec)</label>
+            <input type="number" id="friendAddMaxDelay" value="120" min="10">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Max friends to add per hour</label>
+            <input type="number" id="maxFriendsPerHour" value="15" min="1">
+          </div>
+          <div class="field">
+            <label>Max friends to add per day</label>
+            <input type="number" id="maxFriendsPerDay" value="50" min="1">
+          </div>
+        </div>
+        
+        <div class="toggle-row">
+          <label>Random pause after X adds</label>
+          <label class="switch">
+            <input type="checkbox" id="pauseAfterAdds" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Pause after X adds</label>
+            <input type="number" id="pauseAfterAddsCount" value="5" min="1">
+          </div>
+          <div class="field">
+            <label>Pause duration (min)</label>
+            <input type="number" id="pauseAfterAddsDuration" value="10" min="1">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== SCHEDULING & ANTI-BOT SECTION ========== -->
+    <div class="section" id="sectionScheduling">
+      <div class="section-header" onclick="toggleSection('sectionScheduling')">
+        <span class="section-title"><span class="icon">📅</span>Scheduling & Anti-Bot</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="antibot-box">
+          <div class="antibot-title">🛡️ Anti-Bot Detection Active</div>
+          <div class="antibot-item"><span class="check">✓</span> Random delays between actions</div>
+          <div class="antibot-item"><span class="check">✓</span> Human-like mouse movements</div>
+          <div class="antibot-item"><span class="check">✓</span> Random sleep periods</div>
+          <div class="antibot-item"><span class="check">✓</span> Typing simulation</div>
+          <div class="antibot-item"><span class="check">✓</span> Activity variance</div>
+        </div>
+        
+        <h2>Run Schedule</h2>
+        <div class="toggle-row">
+          <label>Enable scheduling</label>
+          <label class="switch">
+            <input type="checkbox" id="enableSchedule">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Start time</label>
+            <input type="text" id="scheduleStart" placeholder="8am">
+          </div>
+          <div class="field">
+            <label>End time</label>
+            <input type="text" id="scheduleEnd" placeholder="1am">
+          </div>
+        </div>
+        <div class="toggle-row">
+          <label>Different weekend schedule</label>
+          <label class="switch">
+            <input type="checkbox" id="weekendSchedule">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Weekend start</label>
+            <input type="text" id="weekendStart" placeholder="10am">
+          </div>
+          <div class="field">
+            <label>Weekend end</label>
+            <input type="text" id="weekendEnd" placeholder="3am">
+          </div>
+        </div>
+        
+        <h2>Chat Speed & Timing</h2>
+        <div class="field">
+          <label>Chat Speed</label>
+          <div class="btn-group">
+            <button id="speedSlow" onclick="setChatSpeed('slow')">🐢 Slow</button>
+            <button id="speedMedium" class="active" onclick="setChatSpeed('medium')">🚶 Medium</button>
+            <button id="speedFast" onclick="setChatSpeed('fast')">🏃 Fast</button>
+          </div>
+          <div class="help">Slow = more human-like, Fast = higher volume</div>
+        </div>
+        
+        <div class="row">
+          <div class="field">
+            <label>Min delay between chats (sec)</label>
+            <input type="number" id="chatMinDelay" value="30" min="5">
+          </div>
+          <div class="field">
+            <label>Max delay between chats (sec)</label>
+            <input type="number" id="chatMaxDelay" value="180" min="10">
+          </div>
+        </div>
+        
+        <div class="row">
+          <div class="field">
+            <label>Typing speed (chars/sec)</label>
+            <input type="number" id="typingSpeed" value="8" min="1" max="30">
+          </div>
+          <div class="field">
+            <label>Read message delay (sec)</label>
+            <input type="number" id="readMessageDelay" value="3" min="1">
+          </div>
+        </div>
+        
+        <h2>Random Sleep / Breaks</h2>
+        <div class="toggle-row">
+          <label>Enable random sleep breaks</label>
+          <label class="switch">
+            <input type="checkbox" id="enableRandomSleep" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Sleep every X-Y messages</label>
+            <div class="row" style="margin:0;">
+              <input type="number" id="sleepAfterMessagesMin" value="10" min="1" style="width:50%;">
+              <input type="number" id="sleepAfterMessagesMax" value="25" min="1" style="width:50%;">
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Sleep duration min (min)</label>
+            <input type="number" id="sleepDurationMin" value="5" min="1">
+          </div>
+          <div class="field">
+            <label>Sleep duration max (min)</label>
+            <input type="number" id="sleepDurationMax" value="15" min="1">
+          </div>
+        </div>
+        
+        <div class="toggle-row">
+          <label>Long break every X hours</label>
+          <label class="switch">
+            <input type="checkbox" id="enableLongBreak" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Break after X hours</label>
+            <input type="number" id="longBreakAfterHours" value="2" min="1">
+          </div>
+          <div class="field">
+            <label>Break duration (min)</label>
+            <input type="number" id="longBreakDuration" value="30" min="5">
+          </div>
+        </div>
+        
+        <h2>Activity Variance</h2>
+        <div class="toggle-row">
+          <label>Vary activity throughout day</label>
+          <label class="switch">
+            <input type="checkbox" id="varyActivity" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="help">More active during peak hours, slower at night</div>
+        
+        <div class="toggle-row">
+          <label>Random scroll/browse actions</label>
+          <label class="switch">
+            <input type="checkbox" id="randomBrowse" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="help">Occasionally scroll, view stories, look at other profiles</div>
+        
+        <div class="toggle-row">
+          <label>Simulate typing mistakes</label>
+          <label class="switch">
+            <input type="checkbox" id="simulateTypos">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="field">
+          <label>Typo rate</label>
+          <div class="range-row">
+            <span>0%</span>
+            <input type="range" id="typoRate" min="0" max="10" value="2">
+            <span>10%</span>
+            <span class="range-value" id="typoRateVal">2</span>
+          </div>
+        </div>
+        
+        <div class="toggle-row">
+          <label>Random delays variance ±%</label>
+          <label class="switch">
+            <input type="checkbox" id="delayVariance" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="field">
+          <label>Variance amount</label>
+          <div class="range-row">
+            <span>±10%</span>
+            <input type="range" id="varianceAmount" min="10" max="50" value="30">
+            <span>±50%</span>
+            <span class="range-value" id="varianceVal">30%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== PERSONA SECTION ========== -->
+    <div class="section collapsed" id="sectionPersona">
+      <div class="section-header" onclick="toggleSection('sectionPersona')">
+        <span class="section-title"><span class="icon">👤</span>Profile / Model Info</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="row">
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="personaName" placeholder="Your name">
+          </div>
+          <div class="field">
+            <label>Age</label>
+            <input type="number" id="personaAge" value="22" min="18" max="99">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Gender</label>
+            <div class="btn-group">
+              <button id="genderFemale" class="active" onclick="setGender('female')">Female</button>
+              <button id="genderMale" onclick="setGender('male')">Male</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>City</label>
+            <input type="text" id="personaCity" placeholder="e.g., Los Angeles">
+          </div>
+        </div>
+        <div class="field">
+          <label>Model Info / Bio (200 chars)</label>
+          <textarea id="personaBio" placeholder="Your page is Only $7.50/month. Daily noods & vids. All-black fits, cosplay, FPS gamer girl energy..." maxlength="200"></textarea>
+          <div class="help"><span id="bioCharCount">0</span>/200 characters</div>
+        </div>
+        
+        <h2 style="margin-top:15px;">Chatting Style</h2>
+        <div class="btn-group">
+          <button id="styleYouthful" onclick="setChattingStyle('youthful')">Youthful</button>
+          <button id="styleMature" class="active" onclick="setChattingStyle('mature')">Mature</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== PHYSICAL DETAILS ========== -->
+    <div class="section collapsed" id="sectionPhysical">
+      <div class="section-header" onclick="toggleSection('sectionPhysical')">
+        <span class="section-title"><span class="icon">💅</span>Physical Details</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="row">
+          <div class="field">
+            <label>Hair Color</label>
+            <input type="text" id="hairColor" placeholder="blonde, brunette, etc.">
+          </div>
+          <div class="field">
+            <label>Eye Color</label>
+            <input type="text" id="eyeColor" placeholder="blue, green, etc.">
+          </div>
+        </div>
+        <div class="field">
+          <label>Body Type</label>
+          <select id="bodyType">
+            <option value="">-- Select --</option>
+            <option value="petite">Petite</option>
+            <option value="slim">Slim</option>
+            <option value="athletic">Athletic/Fit</option>
+            <option value="curvy">Curvy</option>
+            <option value="thick">Thick</option>
+            <option value="bbw">BBW</option>
+          </select>
+        </div>
+        
+        <label class="checkbox">
+          <input type="checkbox" id="hasTattoos" onchange="toggleConditional('tattoosDetails', this.checked)">
+          I have tattoos
+        </label>
+        <div class="conditional" id="tattoosDetails">
+          <textarea id="tattooDesc" placeholder="Describe your tattoos..."></textarea>
+        </div>
+        
+        <label class="checkbox">
+          <input type="checkbox" id="hasPiercings" onchange="toggleConditional('piercingsDetails', this.checked)">
+          I have piercings
+        </label>
+        <div class="conditional" id="piercingsDetails">
+          <textarea id="piercingDesc" placeholder="Describe your piercings..."></textarea>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== INTERESTS & HOBBIES ========== -->
+    <div class="section collapsed" id="sectionInterests">
+      <div class="section-header" onclick="toggleSection('sectionInterests')">
+        <span class="section-title"><span class="icon">🎮</span>Interests & Hobbies</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="field">
+          <label>Hobbies (comma-separated)</label>
+          <input type="text" id="hobbies" placeholder="gym, yoga, cooking, traveling">
+        </div>
+        
+        <label class="checkbox">
+          <input type="checkbox" id="playsGames" onchange="toggleConditional('gamesDetails', this.checked)">
+          I play video games
+        </label>
+        <div class="conditional" id="gamesDetails">
+          <input type="text" id="gamesList" placeholder="Fortnite, COD, Valorant, GTA...">
+        </div>
+        
+        <div class="field">
+          <label>Favorite Music</label>
+          <input type="text" id="musicTaste" placeholder="rap, pop, r&b, edm...">
+        </div>
+        <div class="field">
+          <label>Shows/Movies</label>
+          <input type="text" id="showsMovies" placeholder="Netflix, reality TV, anime...">
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== CTA / CONTENT SECTION ========== -->
+    <div class="section collapsed" id="sectionCTA">
+      <div class="section-header" onclick="toggleSection('sectionCTA')">
+        <span class="section-title"><span class="icon">💰</span>Rotating CTAs</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="field">
+          <label>Platform</label>
+          <select id="ctaPlatform">
+            <option value="onlyfans">OnlyFans</option>
+            <option value="fansly">Fansly</option>
+            <option value="snapchat">Snapchat Premium</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>CTA Info (what you're promoting)</label>
+          <textarea id="ctaInfo" placeholder="Your page is Only $7.50/month. Daily noods & vids..." maxlength="200"></textarea>
+        </div>
+        
+        <div class="row">
+          <div class="field">
+            <label>Messages before CTA</label>
+            <input type="number" id="messagesBeforeCTA" value="3" min="0" max="20">
+            <div class="help">Min message exchanges before sending CTA</div>
+          </div>
+          <div class="field">
+            <label>Price Range</label>
+            <input type="text" id="priceRange" placeholder="$5-20">
+          </div>
+        </div>
+        
+        <div class="toggle-row">
+          <label>Send CTA immediately if they ask for OnlyFans</label>
+          <label class="switch">
+            <input type="checkbox" id="sendCTAOnOnlyFansRequest" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="help" style="margin-top:-5px;margin-bottom:10px;">If they ask "do you have OF" or similar, send link immediately and say "yeah i got one"</div>
+        
+        <div class="toggle-row">
+          <label>Choose CTA randomly</label>
+          <label class="switch">
+            <input type="checkbox" id="ctaRandom">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Auto detect bans</label>
+          <label class="switch">
+            <input type="checkbox" id="ctaAutoBan">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== DAY/NIGHT SETTINGS ========== -->
+    <div class="section collapsed" id="sectionDayNight">
+      <div class="section-header" onclick="toggleSection('sectionDayNight')">
+        <span class="section-title"><span class="icon">🌙</span>Day/Night Settings</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="field">
+          <label>Day time setting (context for daytime convos)</label>
+          <textarea id="dayTimeSetting" placeholder="You're juggling Overwatch and pretending to do college work, but boredom's kicking in..."></textarea>
+        </div>
+        <div class="field">
+          <label>Night time setting (context for nighttime convos)</label>
+          <textarea id="nightTimeSetting" placeholder="It's late. Homework's done. You're bored, a little lonely—cleaning your room in a hoodie..."></textarea>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== OPENER SECTION ========== -->
+    <div class="section collapsed" id="sectionOpener">
+      <div class="section-header" onclick="toggleSection('sectionOpener')">
+        <span class="section-title"><span class="icon">👋</span>Opener</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="toggle-row">
+          <label>Use AI opener</label>
+          <label class="switch">
+            <input type="checkbox" id="useAIOpener">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Live photos</label>
+          <label class="switch">
+            <input type="checkbox" id="openerLivePhotos">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="field">
+          <label>Message spintax (or static opener)</label>
+          <textarea id="openerMessage" placeholder="hey|hi|heyy {how are you|what's up}"></textarea>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== PHOTOS SECTION ========== -->
+    <div class="section collapsed" id="sectionPhotos">
+      <div class="section-header" onclick="toggleSection('sectionPhotos')">
+        <span class="section-title"><span class="icon">📸</span>Photos</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="toggle-row">
+          <label>Enable photos</label>
+          <label class="switch">
+            <input type="checkbox" id="photosEnabled">
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <h2>Photo Categories</h2>
+        <div class="toggle-row">
+          <label>Main (general conversations)</label>
+          <label class="switch">
+            <input type="checkbox" id="photoCategoryMain" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Sexy (teasing/CTA phase)</label>
+          <label class="switch">
+            <input type="checkbox" id="photoCategorySexy" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Sad (rarely used)</label>
+          <label class="switch">
+            <input type="checkbox" id="photoCategorySad">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Pose (proof you're real)</label>
+          <label class="switch">
+            <input type="checkbox" id="photoCategoryPose" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <h2 style="margin-top:15px;">Photo Management</h2>
+        <div class="field">
+          <label>Upload Photos</label>
+          <input type="file" id="photoUpload" accept="image/*" multiple style="display:none;">
+          <button class="btn-secondary btn-small" onclick="document.getElementById('photoUpload').click()" style="background:#9C27B0;">📤 Upload Photos</button>
+          <div class="help">Photos are stored locally. Never reuse same photo to same username.</div>
+        </div>
+        
+        <div id="photoList" style="margin-top:15px;">
+          <div style="color:#666;font-size:11px;text-align:center;padding:20px;">No photos uploaded yet</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== FOLLOW UPS SECTION ========== -->
+    <div class="section collapsed" id="sectionFollowUps">
+      <div class="section-header" onclick="toggleSection('sectionFollowUps')">
+        <span class="section-title"><span class="icon">📩</span>Follow Ups</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="toggle-row">
+          <label>Use AI follow ups</label>
+          <label class="switch">
+            <input type="checkbox" id="useAIFollowUps" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Only send if NO reply (wait for response first)</label>
+          <label class="switch">
+            <input type="checkbox" id="followUpOnlyIfNoReply" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="help" style="margin-top:-5px;margin-bottom:10px;">If checked: Only send follow-up if they didn't reply. If unchecked: Send follow-up even if they replied.</div>
+        <div class="row">
+          <div class="field">
+            <label>Follow up delay (hours)</label>
+            <input type="number" id="followUpDelay" value="8" min="1">
+          </div>
+          <div class="field">
+            <label>Maximum follow ups</label>
+            <input type="number" id="maxFollowUps" value="20" min="1">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== PHASES SECTION ========== -->
+    <div class="section collapsed" id="sectionPhases">
+      <div class="section-header" onclick="toggleSection('sectionPhases')">
+        <span class="section-title"><span class="icon">📈</span>Phases</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="field">
+          <label>Move between phases</label>
+          <select id="phaseMoveTrigger">
+            <option value="exchanges">Exchanges</option>
+            <option value="days">Days</option>
+            <option value="exchanges_or_days">Exchanges or Days</option>
+            <option value="exchanges_and_days">Exchanges and Days</option>
+          </select>
+        </div>
+        
+        <div class="phase-card">
+          <div class="phase-title">Phase 1</div>
+          <div class="row">
+            <div class="field">
+              <label>Min exchanges</label>
+              <input type="number" id="phase1MinExchanges" value="0" min="0">
+            </div>
+            <div class="field">
+              <label>Interest level</label>
+              <div class="btn-group">
+                <button onclick="setInterestLevel(1,'low')">Low</button>
+                <button onclick="setInterestLevel(1,'medium')" class="active" id="phase1InterestMedium">Medium</button>
+                <button onclick="setInterestLevel(1,'high')">High</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Live photo rate</label>
+            <div class="range-row">
+              <span>0%</span>
+              <input type="range" id="phase1PhotoRate" min="0" max="100" value="4">
+              <span>100%</span>
+              <span class="range-value" id="phase1PhotoRateVal">4</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="phase-card">
+          <div class="phase-title">Phase 2</div>
+          <div class="row">
+            <div class="field">
+              <label>Min exchanges</label>
+              <input type="number" id="phase2MinExchanges" value="5" min="0">
+            </div>
+            <div class="field">
+              <label>Interest level</label>
+              <div class="btn-group">
+                <button onclick="setInterestLevel(2,'low')">Low</button>
+                <button onclick="setInterestLevel(2,'medium')">Medium</button>
+                <button onclick="setInterestLevel(2,'high')" class="active" id="phase2InterestHigh">High</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Photo send rate</label>
+            <div class="range-row">
+              <span>0%</span>
+              <input type="range" id="phase2PhotoRate" min="0" max="100" value="0">
+              <span>100%</span>
+              <span class="range-value" id="phase2PhotoRateVal">0</span>
+            </div>
+          </div>
+        </div>
+        
+        <div id="dynamicPhases"></div>
+        
+        <button class="btn-secondary btn-small" id="addPhaseBtn" style="background:#9C27B0;">+ Add a phase</button>
+        
+        <div class="field" style="margin-top:20px;">
+          <div class="toggle-row">
+            <label>Ask for CTA after all phases complete</label>
+            <label class="switch">
+              <input type="checkbox" id="askCTAAfterPhases" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="help">After completing all phases, automatically ask for CTA/conversion</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== OBJECTIONS SECTION ========== -->
+    <div class="section collapsed" id="sectionObjections">
+      <div class="section-header" onclick="toggleSection('sectionObjections')">
+        <span class="section-title"><span class="icon">🛡️</span>Objections</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="toggle-row">
+          <label>Use AI objection handling</label>
+          <label class="switch">
+            <input type="checkbox" id="useAIObjections" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <div class="objection-item">
+          <label>I don't have OF</label>
+          <label class="switch"><input type="checkbox" id="objNoOF" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>I want a real connection</label>
+          <label class="switch"><input type="checkbox" id="objRealConnection" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>What's your socials/number?</label>
+          <label class="switch"><input type="checkbox" id="objSocials" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Do I have to subscribe?</label>
+          <label class="switch"><input type="checkbox" id="objSubscribe" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Call me</label>
+          <label class="switch"><input type="checkbox" id="objCallMe" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>You're a bot</label>
+          <label class="switch"><input type="checkbox" id="objYoureBot" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>You're not real</label>
+          <label class="switch"><input type="checkbox" id="objNotReal" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Let's hang</label>
+          <label class="switch"><input type="checkbox" id="objLetsHang" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>After CTA: Let's meet up</label>
+          <label class="switch"><input type="checkbox" id="objMeetUp" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Not interested</label>
+          <label class="switch"><input type="checkbox" id="objNotInterested" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>We're already talking here</label>
+          <label class="switch"><input type="checkbox" id="objAlreadyTalking" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Why should I pay?</label>
+          <label class="switch"><input type="checkbox" id="objWhyPay" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Send a snap of you doing...</label>
+          <label class="switch"><input type="checkbox" id="objSendSnap" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>You added me just to promote</label>
+          <label class="switch"><input type="checkbox" id="objJustPromote" checked><span class="slider"></span></label>
+        </div>
+        <div class="objection-item">
+          <label>Why is it safer?</label>
+          <label class="switch"><input type="checkbox" id="objWhySafer" checked><span class="slider"></span></label>
+        </div>
+        
+        <div class="toggle-row" style="margin-top:10px;">
+          <label>Strongly decline meetups</label>
+          <label class="switch">
+            <input type="checkbox" id="stronglyDeclineMeetups">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== CONVERSATION SETTINGS ========== -->
+    <div class="section collapsed" id="sectionConvo">
+      <div class="section-header" onclick="toggleSection('sectionConvo')">
+        <span class="section-title"><span class="icon">💬</span>Conversation Settings</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="field">
+          <label>Flirt Level</label>
+          <div class="range-row">
+            <span>Mild</span>
+            <input type="range" id="flirtLevel" min="1" max="10" value="7">
+            <span>Spicy</span>
+            <span class="range-value" id="flirtValue">7</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Emoji Usage</label>
+          <div class="range-row">
+            <span>None</span>
+            <input type="range" id="emojiLevel" min="0" max="3" value="2">
+            <span>Heavy</span>
+            <span class="range-value" id="emojiValue">2</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Response Length</label>
+          <select id="responseLength">
+            <option value="short">Short (1-2 sentences)</option>
+            <option value="medium" selected>Medium (2-4 sentences)</option>
+            <option value="long">Long (paragraph)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Response delay (minutes)</label>
+          <input type="number" id="responseDelay" value="1" min="0">
+        </div>
+        
+        <div class="toggle-row">
+          <label>Use casual slang (lol, omg, ngl)</label>
+          <label class="switch">
+            <input type="checkbox" id="useSlang" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Be mysterious / hard to get</label>
+          <label class="switch">
+            <input type="checkbox" id="beMysterious" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Allow explicit content</label>
+          <label class="switch">
+            <input type="checkbox" id="allowExplicit" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Detect language (auto-translate)</label>
+          <label class="switch">
+            <input type="checkbox" id="detectLanguage">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Continue from DA</label>
+          <label class="switch">
+            <input type="checkbox" id="continueFromDA" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <div class="field">
+          <label>Language</label>
+          <select id="language">
+            <option value="english" selected>English</option>
+            <option value="spanish">Spanish</option>
+            <option value="french">French</option>
+            <option value="german">German</option>
+            <option value="portuguese">Portuguese</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label>Pet names to use</label>
+          <input type="text" id="petNames" placeholder="babe, baby, hun, cutie, handsome">
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== RATE LIMITS ========== -->
+    <div class="section collapsed" id="sectionLimits">
+      <div class="section-header" onclick="toggleSection('sectionLimits')">
+        <span class="section-title"><span class="icon">⏱️</span>Rate Limits</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
     <div class="row">
       <div class="field">
         <label>Max Daily</label>
@@ -277,7 +1761,6 @@
       <div class="field">
         <label>Min Per Session</label>
         <input type="number" id="minSession" value="5" min="0" step="1">
-        <div class="help">Target minimum</div>
       </div>
       <div class="field">
         <label>Max Per Session</label>
@@ -290,9 +1773,17 @@
         <input type="number" id="sessionBreakMins" value="30" min="0" step="5">
       </div>
       <div class="field"></div>
+        </div>
+      </div>
     </div>
     
-    <h2>Delays (ms)</h2>
+    <!-- ========== DELAYS ========== -->
+    <div class="section collapsed" id="sectionDelays">
+      <div class="section-header" onclick="toggleSection('sectionDelays')">
+        <span class="section-title"><span class="icon">⏳</span>Delays (ms)</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
     <div class="row">
       <div class="field">
         <label>Min Delay</label>
@@ -311,17 +1802,25 @@
       <div class="field">
         <label>Max Scrolls</label>
         <input type="number" id="maxScrolls" value="50" min="1" step="5">
+          </div>
+        </div>
       </div>
     </div>
     
-    <h2>Filters</h2>
+    <!-- ========== FILTERS ========== -->
+    <div class="section collapsed" id="sectionFilters">
+      <div class="section-header" onclick="toggleSection('sectionFilters')">
+        <span class="section-title"><span class="icon">🔍</span>Name Filters</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
     <label class="checkbox">
       <input type="checkbox" id="filterNonAmerican" checked>
       Decline non-American names
     </label>
-    <label class="checkbox">
-      <input type="checkbox" id="filterHispanic" checked>
-      Decline Hispanic/Mexican names
+        <label class="checkbox">
+          <input type="checkbox" id="filterHispanic" checked>
+          Decline Hispanic/Mexican names
     </label>
     <label class="checkbox">
       <input type="checkbox" id="filterBrownEmoji" checked>
@@ -331,16 +1830,101 @@
       <input type="checkbox" id="humanLikeMouse" checked>
       Human-like behavior
     </label>
-    <label class="checkbox">
-      <input type="checkbox" id="useAI" checked>
-      Use AI for name detection (more accurate)
-    </label>
+        <label class="checkbox">
+          <input type="checkbox" id="useAI" checked>
+          Use AI for name detection
+        </label>
+      </div>
+    </div>
     
-    <h2>AI Settings</h2>
-    <div class="field">
-      <label>Anthropic API Key</label>
-      <input type="password" id="apiKey" placeholder="sk-ant-..." style="width:100%;padding:8px;border:1px solid #444;border-radius:4px;background:#2a2a2a;color:#fff;font-size:12px;">
-      <div class="help">Get key from console.anthropic.com</div>
+    <!-- ========== AI SETTINGS ========== -->
+    <div class="section collapsed" id="sectionAI">
+      <div class="section-header" onclick="toggleSection('sectionAI')">
+        <span class="section-title"><span class="icon">🤖</span>AI Settings</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="field">
+          <label>Anthropic API Key</label>
+          <input type="password" id="apiKey" placeholder="sk-ant-...">
+          <div class="help">Get key from console.anthropic.com</div>
+        </div>
+        
+        <div class="toggle-row">
+          <label>Enable AI Chat</label>
+          <label class="switch">
+            <input type="checkbox" id="aiChatEnabled" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <!-- Quick Chat Test -->
+        <div style="margin-top:10px;background:#2a2a2a;border-radius:6px;padding:10px;">
+          <label style="font-size:11px;color:#888;">Quick Test:</label>
+          <textarea id="testMessage" placeholder="Type a message to test..." style="height:40px;margin-top:5px;"></textarea>
+          <button id="testChatBtn" class="btn-secondary btn-small" style="width:100%;margin-top:5px;background:#E91E63;">💬 Test Response</button>
+          <div id="chatResponse" style="margin-top:8px;padding:8px;background:#1a1a1a;border-radius:4px;font-size:12px;color:#4CAF50;display:none;white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== MISCELLANEOUS ========== -->
+    <div class="section collapsed" id="sectionMisc">
+      <div class="section-header" onclick="toggleSection('sectionMisc')">
+        <span class="section-title"><span class="icon">⚙️</span>Miscellaneous</span>
+        <span class="section-toggle">▼</span>
+      </div>
+      <div class="section-content">
+        <div class="toggle-row">
+          <label>Advanced settings</label>
+          <label class="switch">
+            <input type="checkbox" id="advancedMode">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Consume only (no sending)</label>
+          <label class="switch">
+            <input type="checkbox" id="consumeOnly">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Priority chatting</label>
+          <label class="switch">
+            <input type="checkbox" id="priorityChatting">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Reply only mode</label>
+          <label class="switch">
+            <input type="checkbox" id="replyOnly">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Save messages</label>
+          <label class="switch">
+            <input type="checkbox" id="saveMessages" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>View their stories before messaging</label>
+          <label class="switch">
+            <input type="checkbox" id="viewStories" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Ignore mass messaged conversations</label>
+          <label class="switch">
+            <input type="checkbox" id="ignoreMassMessages">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
     </div>
     
     <button class="btn-start" id="startBtn">▶ Start Filtering</button>
@@ -372,6 +1956,120 @@
     <div id="status" class="status stopped">Ready</div>
   </div>
   
+  <script>
+    // Section toggle
+    function toggleSection(id) {
+      document.getElementById(id).classList.toggle('collapsed');
+    }
+    
+    // Conditional field toggle
+    function toggleConditional(id, show) {
+      const el = document.getElementById(id);
+      if (show) el.classList.add('show');
+      else el.classList.remove('show');
+    }
+    
+    // Mode toggle (Friends Add / Chat)
+    function toggleMode(mode) {
+      const el = document.getElementById(mode === 'friendsAdd' ? 'modeFriendsAdd' : 'modeChat');
+      const checkbox = document.getElementById(mode === 'friendsAdd' ? 'friendsAddEnabled' : 'chatEnabled');
+      checkbox.checked = !checkbox.checked;
+      el.classList.toggle('active', checkbox.checked);
+    }
+    
+    // Gender toggle
+    function setGender(gender) {
+      document.getElementById('genderFemale').classList.toggle('active', gender === 'female');
+      document.getElementById('genderMale').classList.toggle('active', gender === 'male');
+      window.currentGender = gender;
+    }
+    
+    // Chatting style toggle
+    function setChattingStyle(style) {
+      document.getElementById('styleYouthful').classList.toggle('active', style === 'youthful');
+      document.getElementById('styleMature').classList.toggle('active', style === 'mature');
+      window.currentChattingStyle = style;
+    }
+    
+    // Chat speed toggle
+    function setChatSpeed(speed) {
+      document.getElementById('speedSlow').classList.toggle('active', speed === 'slow');
+      document.getElementById('speedMedium').classList.toggle('active', speed === 'medium');
+      document.getElementById('speedFast').classList.toggle('active', speed === 'fast');
+      window.currentChatSpeed = speed;
+      
+      // Auto-adjust delays based on speed
+      const delays = {
+        slow: { min: 60, max: 300 },
+        medium: { min: 30, max: 180 },
+        fast: { min: 10, max: 60 }
+      };
+      document.getElementById('chatMinDelay').value = delays[speed].min;
+      document.getElementById('chatMaxDelay').value = delays[speed].max;
+    }
+    
+    // Interest level for phases
+    function setInterestLevel(phase, level) {
+      window['phase' + phase + 'Interest'] = level;
+    }
+    
+    // Update mode switch visual state
+    function updateModeSwitches() {
+      const friendsEnabled = document.getElementById('friendsAddEnabled').checked;
+      const chatEnabled = document.getElementById('chatEnabled').checked;
+      document.getElementById('modeFriendsAdd').classList.toggle('active', friendsEnabled);
+      document.getElementById('modeChat').classList.toggle('active', chatEnabled);
+    }
+    
+    // Range sliders update
+    document.addEventListener('DOMContentLoaded', () => {
+      // Mode switch listeners
+      document.getElementById('friendsAddEnabled').addEventListener('change', updateModeSwitches);
+      document.getElementById('chatEnabled').addEventListener('change', updateModeSwitches);
+      
+      // Flirt level
+      const flirtSlider = document.getElementById('flirtLevel');
+      const flirtValue = document.getElementById('flirtValue');
+      if (flirtSlider && flirtValue) {
+        flirtSlider.oninput = () => flirtValue.textContent = flirtSlider.value;
+      }
+      
+      // Emoji level
+      const emojiSlider = document.getElementById('emojiLevel');
+      const emojiValue = document.getElementById('emojiValue');
+      if (emojiSlider && emojiValue) {
+        emojiSlider.oninput = () => emojiValue.textContent = emojiSlider.value;
+      }
+      
+      // Phase 1 photo rate
+      const phase1Slider = document.getElementById('phase1PhotoRate');
+      const phase1Value = document.getElementById('phase1PhotoRateVal');
+      if (phase1Slider && phase1Value) {
+        phase1Slider.oninput = () => phase1Value.textContent = phase1Slider.value;
+      }
+      
+      // Typo rate
+      const typoSlider = document.getElementById('typoRate');
+      const typoValue = document.getElementById('typoRateVal');
+      if (typoSlider && typoValue) {
+        typoSlider.oninput = () => typoValue.textContent = typoSlider.value;
+      }
+      
+      // Variance amount
+      const varianceSlider = document.getElementById('varianceAmount');
+      const varianceValue = document.getElementById('varianceVal');
+      if (varianceSlider && varianceValue) {
+        varianceSlider.oninput = () => varianceValue.textContent = varianceSlider.value + '%';
+      }
+      
+      // Bio char count
+      const bioInput = document.getElementById('personaBio');
+      const bioCount = document.getElementById('bioCharCount');
+      if (bioInput && bioCount) {
+        bioInput.oninput = () => bioCount.textContent = bioInput.value.length;
+      }
+    });
+  </script>
   <script src="panel.js"></script>
 </body>
 </html>

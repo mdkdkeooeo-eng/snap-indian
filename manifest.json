@@ -24,8 +24,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["panel.html", "panel.js"],
-      "matches": ["https://web.snapchat.com/*", "https://snapchat.com/*", "https://*.snapchat.com/*"]
+      "resources": ["panel.html", "panel.js", "ai-chat.js", "ai-chat-popup.html", "ai-chat-popup.js"],
+      "matches": ["https://web.snapchat.com/*", "https://snapchat.com/*", "https://*.snapchat.com/*", "<all_urls>"]
     }
   ],
   "content_scripts": [

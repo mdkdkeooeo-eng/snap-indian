@@ -267,6 +267,1067 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     }
   }
   
+  // ============================================
+  // USER ID TRACKING - Prevents messaging same person on new Snapchat
+  // ============================================
+  // Use these functions to track which users have been messaged
+  // Format: userId should be "username-name" or just "username" or "name"
+  // This persists across browser sessions and new Snapchat logins
+  // ============================================
+  
+  // Track messaged user IDs (persistent across sessions)
+  async function hasMessagedUser(userId) {
+    try {
+      const data = await chrome.storage.local.get('messagedUsers');
+      const messaged = data.messagedUsers || {};
+      return messaged[userId] === true;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  async function markUserAsMessaged(userId) {
+    try {
+      const data = await chrome.storage.local.get('messagedUsers');
+      const messaged = data.messagedUsers || {};
+      messaged[userId] = true;
+      await chrome.storage.local.set({ messagedUsers: messaged });
+      log('Marked user as messaged: ' + userId);
+    } catch (e) {
+      log('Failed to mark user as messaged: ' + e);
+    }
+  }
+  
+  // ============================================
+  // CONVERSATION READING - Understands context before responding
+  // ============================================
+  // These functions read the actual conversation from the page
+  // so the AI can understand context and respond appropriately
+  // Use getConversationContext() to get formatted history for AI
+  // ============================================
+  
+  // Read conversation messages from the current chat
+  async function readConversationMessages() {
+    try {
+      // Look for message elements in the chat view
+      // Snapchat web typically uses divs with message content
+      const messages = [];
+      
+      // Try multiple selectors for message containers
+      const messageSelectors = [
+        '[data-testid*="message"]',
+        '[class*="Message"]',
+        '[class*="message"]',
+        'div[role="log"] > div', // Common chat container pattern
+        '.chat-messages > div',
+        '[aria-label*="message"]'
+      ];
+      
+      let messageElements = [];
+      for (const selector of messageSelectors) {
+        messageElements = Array.from(document.querySelectorAll(selector));
+        if (messageElements.length > 0) break;
+      }
+      
+      // If no specific selector works, try to find all divs with text that might be messages
+      if (messageElements.length === 0) {
+        // Look for divs that contain text and are in a scrollable container
+        const chatContainers = document.querySelectorAll('[role="log"], [class*="chat"], [class*="conversation"], [class*="messages"]');
+        chatContainers.forEach(container => {
+          const divs = container.querySelectorAll('div[class*="Message"], div[class*="message"]');
+          messageElements.push(...Array.from(divs));
+        });
+      }
+      
+      // Extract message text and determine sender
+      messageElements.forEach((el, index) => {
+        const text = (el.textContent || el.innerText || '').trim();
+        if (text.length < 1 || text.length > 500) return; // Skip empty or too long
+        
+        // Try to determine if it's sent by us or them
+        // Common patterns: look for "You" indicator, or check position/classes
+        const isFromMe = el.classList.toString().includes('sent') || 
+                        el.classList.toString().includes('me') ||
+                        el.classList.toString().includes('outgoing') ||
+                        el.getAttribute('data-sender') === 'me' ||
+                        el.closest('[class*="sent"], [class*="me"], [class*="outgoing"]');
+        
+        messages.push({
+          index: index,
+          text: text,
+          isFromMe: !!isFromMe,
+          timestamp: new Date().toISOString() // Approximate
+        });
+      });
+      
+      // Return last 20 messages (most recent)
+      return messages.slice(-20).reverse(); // Most recent first
+      
+    } catch (e) {
+      log('Error reading conversation: ' + e);
+      return [];
+    }
+  }
+  
+  // Get conversation context for AI
+  async function getConversationContext() {
+    const messages = await readConversationMessages();
+    if (messages.length === 0) return null;
+    
+    // Format as conversation history
+    const history = messages.map(msg => ({
+      role: msg.isFromMe ? 'assistant' : 'user',
+      content: msg.text
+    }));
+    
+    return {
+      messages: history,
+      lastMessage: messages[0]?.text || '',
+      lastMessageFrom: messages[0]?.isFromMe ? 'me' : 'them',
+      messageCount: messages.length
+    };
+  }
+  
+  // Get user ID from current conversation (username-name format)
+  async function getCurrentConversationUserId() {
+    try {
+      // Try to find username/name in the chat header or conversation info
+      const headerSelectors = [
+        '[data-testid*="header"]',
+        '[class*="Header"]',
+        '[class*="header"]',
+        'h1', 'h2',
+        '[aria-label*="chat"], [aria-label*="conversation"]'
+      ];
+      
+      for (const selector of headerSelectors) {
+        const header = document.querySelector(selector);
+        if (header) {
+          const text = (header.textContent || header.innerText || '').trim();
+          // Try to extract username from text
+          const usernameMatch = text.match(/@?(\w+)/);
+          if (usernameMatch) {
+            // Try to find name nearby
+            const nameMatch = text.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+            if (nameMatch && usernameMatch[1] !== nameMatch[1]) {
+              return usernameMatch[1] + '-' + nameMatch[1];
+            }
+            return usernameMatch[1];
+          }
+        }
+      }
+      
+      // Fallback: try to get from URL or other indicators
+      // Snapchat web URLs sometimes contain user identifiers
+      const urlMatch = location.href.match(/[?&]user=([^&]+)/);
+      if (urlMatch) return urlMatch[1];
+      
+      return null;
+    } catch (e) {
+      log('Error getting conversation user ID: ' + e);
+      return null;
+    }
+  }
+  
+  // Check if we should message this user (hasn't been messaged before)
+  async function shouldMessageUser(userId) {
+    if (!userId) {
+      log('No user ID provided, skipping message');
+      return false;
+    }
+    
+    const alreadyMessaged = await hasMessagedUser(userId);
+    if (alreadyMessaged) {
+      log('User already messaged, skipping: ' + userId);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  // ============================================
+  // FOLLOW-UP TRACKING - Send follow-up if no reply after X hours
+  // ============================================
+  // Tracks when messages were sent and whether user replied
+  // Only sends follow-up if no reply after the delay time
+  // ============================================
+  
+  // Track message sent to a user (for follow-up purposes)
+  async function trackMessageSent(userId, messageText) {
+    try {
+      const data = await chrome.storage.local.get('conversationTracking');
+      const tracking = data.conversationTracking || {};
+      
+      if (!tracking[userId]) {
+        tracking[userId] = {
+          userId: userId,
+          firstMessageAt: new Date().toISOString(),
+          lastMessageAt: new Date().toISOString(),
+          messagesSent: 1,
+          followUpsSent: 0,
+          lastReplyAt: null,
+          lastMessageText: messageText
+        };
+      } else {
+        tracking[userId].lastMessageAt = new Date().toISOString();
+        tracking[userId].messagesSent = (tracking[userId].messagesSent || 0) + 1;
+        tracking[userId].lastMessageText = messageText;
+      }
+      
+      await chrome.storage.local.set({ conversationTracking: tracking });
+      log('Tracked message sent to: ' + userId);
+    } catch (e) {
+      log('Failed to track message: ' + e);
+    }
+  }
+  
+  // Track reply received from a user
+  async function trackReplyReceived(userId) {
+    try {
+      const data = await chrome.storage.local.get('conversationTracking');
+      const tracking = data.conversationTracking || {};
+      
+      if (!tracking[userId]) {
+        tracking[userId] = { userId: userId };
+      }
+      
+      tracking[userId].lastReplyAt = new Date().toISOString();
+      tracking[userId].replied = true;
+      
+      await chrome.storage.local.set({ conversationTracking: tracking });
+      log('Tracked reply from: ' + userId);
+    } catch (e) {
+      log('Failed to track reply: ' + e);
+    }
+  }
+  
+  // Check if we should send a follow-up message
+  // Returns: { shouldSend: true/false, reason: string, nextFollowUpTime: date }
+  async function shouldSendFollowUp(userId, followUpDelayHours, maxFollowUps, onlyIfNoReply = true) {
+    try {
+      const data = await chrome.storage.local.get('conversationTracking');
+      const tracking = data.conversationTracking || {};
+      const userTracking = tracking[userId];
+      
+      if (!userTracking || !userTracking.lastMessageAt) {
+        return { shouldSend: false, reason: 'No previous message tracked' };
+      }
+      
+      // Check if they've already replied (if we only send follow-ups if no reply)
+      if (onlyIfNoReply && userTracking.lastReplyAt) {
+        const lastReplyTime = new Date(userTracking.lastReplyAt);
+        const lastMessageTime = new Date(userTracking.lastMessageAt);
+        
+        // If they replied after our last message, don't send follow-up
+        if (lastReplyTime > lastMessageTime) {
+          return { shouldSend: false, reason: 'User already replied' };
+        }
+      }
+      
+      // Check if we've exceeded max follow-ups
+      const followUpsSent = userTracking.followUpsSent || 0;
+      if (followUpsSent >= maxFollowUps) {
+        return { shouldSend: false, reason: 'Max follow-ups reached (' + maxFollowUps + ')' };
+      }
+      
+      // Check if enough time has passed
+      const lastMessageTime = new Date(userTracking.lastMessageAt);
+      const now = new Date();
+      const hoursSinceLastMessage = (now - lastMessageTime) / (1000 * 60 * 60);
+      
+      if (hoursSinceLastMessage < followUpDelayHours) {
+        const hoursRemaining = followUpDelayHours - hoursSinceLastMessage;
+        return { 
+          shouldSend: false, 
+          reason: 'Not enough time passed (' + hoursRemaining.toFixed(1) + 'h remaining)',
+          nextFollowUpTime: new Date(lastMessageTime.getTime() + (followUpDelayHours * 60 * 60 * 1000))
+        };
+      }
+      
+      // All checks passed - should send follow-up
+      return { 
+        shouldSend: true, 
+        reason: 'No reply after ' + hoursSinceLastMessage.toFixed(1) + ' hours',
+        hoursSinceLastMessage: hoursSinceLastMessage
+      };
+      
+    } catch (e) {
+      log('Error checking follow-up: ' + e);
+      return { shouldSend: false, reason: 'Error: ' + e };
+    }
+  }
+  
+  // Mark follow-up as sent
+  async function trackFollowUpSent(userId) {
+    try {
+      const data = await chrome.storage.local.get('conversationTracking');
+      const tracking = data.conversationTracking || {};
+      
+      if (!tracking[userId]) {
+        tracking[userId] = { userId: userId };
+      }
+      
+      tracking[userId].followUpsSent = (tracking[userId].followUpsSent || 0) + 1;
+      tracking[userId].lastFollowUpAt = new Date().toISOString();
+      tracking[userId].lastMessageAt = new Date().toISOString(); // Update last message time
+      
+      await chrome.storage.local.set({ conversationTracking: tracking });
+      log('Tracked follow-up sent to: ' + userId + ' (total: ' + tracking[userId].followUpsSent + ')');
+    } catch (e) {
+      log('Failed to track follow-up: ' + e);
+    }
+  }
+  
+  // Get all users that need follow-ups
+  async function getPendingFollowUps(followUpDelayHours, maxFollowUps, onlyIfNoReply = true) {
+    try {
+      const data = await chrome.storage.local.get('conversationTracking');
+      const tracking = data.conversationTracking || {};
+      const pending = [];
+      
+      for (const userId in tracking) {
+        const check = await shouldSendFollowUp(userId, followUpDelayHours, maxFollowUps, onlyIfNoReply);
+        if (check.shouldSend) {
+          pending.push({
+            userId: userId,
+            ...check,
+            tracking: tracking[userId]
+          });
+        }
+      }
+      
+      return pending;
+    } catch (e) {
+      log('Error getting pending follow-ups: ' + e);
+      return [];
+    }
+  }
+  
+  // ============================================
+  // PHOTO MANAGEMENT - Never reuse photos to same username
+  // ============================================
+  // Photo selection based on conversation context
+  // Main: general conversations
+  // Sexy: teasing/CTA phase
+  // Sad: rarely used
+  // Pose: when they ask to prove you're real
+  // ============================================
+  
+  // Get photos by category (filtered by enabled categories)
+  async function getPhotosByCategory(category, enabledCategories) {
+    try {
+      if (!enabledCategories[category]) {
+        return []; // Category disabled
+      }
+      
+      const data = await chrome.storage.local.get('photos');
+      const photos = data.photos || [];
+      
+      return photos.filter(p => p.category === category && p.dataUrl);
+    } catch (e) {
+      log('Error getting photos: ' + e);
+      return [];
+    }
+  }
+  
+  // Select appropriate photo based on conversation context
+  // Returns: { photo: object, category: string } or null
+  async function selectPhotoForUser(userId, context = {}) {
+    try {
+      const settings = await chrome.storage.sync.get([
+        'photosEnabled', 'photoCategoryMain', 'photoCategorySexy', 
+        'photoCategorySad', 'photoCategoryPose'
+      ]);
+      
+      if (!settings.photosEnabled) {
+        return null; // Photos disabled
+      }
+      
+      const enabledCategories = {
+        main: settings.photoCategoryMain !== false,
+        sexy: settings.photoCategorySexy !== false,
+        sad: settings.photoCategorySad === true,
+        pose: settings.photoCategoryPose !== false
+      };
+      
+      // Load photos and sent tracking
+      const data = await chrome.storage.local.get('photos');
+      let photos = data.photos || [];
+      
+      // Determine which category to use based on context
+      let targetCategory = 'main'; // Default
+      
+      // If in CTA phase, use sexy photos for teasing
+      if (context.ctaPhase && context.ctaPhase === true) {
+        targetCategory = 'sexy';
+      }
+      // If they asked to prove you're real, use pose
+      else if (context.needsProof && context.needsProof === true) {
+        targetCategory = 'pose';
+      }
+      // If conversation is sad/down, rarely use sad (only if enabled)
+      else if (context.isSad && context.isSad === true && enabledCategories.sad) {
+        targetCategory = 'sad';
+      }
+      
+      // Get available photos for this category
+      let availablePhotos = photos.filter(p => 
+        p.category === targetCategory && 
+        p.dataUrl && 
+        enabledCategories[p.category]
+      );
+      
+      // Filter out photos already sent to this user (NEVER REUSE)
+      availablePhotos = availablePhotos.filter(photo => {
+        const sentTo = photo.sentTo || [];
+        return !sentTo.includes(userId);
+      });
+      
+      // If no photos available for this category, try main as fallback
+      if (availablePhotos.length === 0 && targetCategory !== 'main') {
+        availablePhotos = photos.filter(p => 
+          p.category === 'main' && 
+          p.dataUrl && 
+          enabledCategories.main
+        );
+        availablePhotos = availablePhotos.filter(photo => {
+          const sentTo = photo.sentTo || [];
+          return !sentTo.includes(userId);
+        });
+        targetCategory = 'main';
+      }
+      
+      if (availablePhotos.length === 0) {
+        log('No photos available for user: ' + userId);
+        return null;
+      }
+      
+      // Select random photo from available
+      const selectedPhoto = availablePhotos[Math.floor(Math.random() * availablePhotos.length)];
+      
+      return {
+        photo: selectedPhoto,
+        category: targetCategory
+      };
+      
+    } catch (e) {
+      log('Error selecting photo: ' + e);
+      return null;
+    }
+  }
+  
+  // Mark photo as sent to user (prevents reuse)
+  async function markPhotoSentToUser(userId, photoId) {
+    try {
+      const data = await chrome.storage.local.get('photos');
+      let photos = data.photos || [];
+      
+      const photo = photos.find(p => p.id === photoId);
+      if (photo) {
+        if (!photo.sentTo) {
+          photo.sentTo = [];
+        }
+        if (!photo.sentTo.includes(userId)) {
+          photo.sentTo.push(userId);
+          await chrome.storage.local.set({ photos: photos });
+          log('Marked photo sent to user: ' + userId);
+        }
+      }
+    } catch (e) {
+      log('Error marking photo sent: ' + e);
+    }
+  }
+  
+  // Inject photo into Snapchat camera/upload interface
+  async function injectPhotoToSnapchat(photoDataUrl, description) {
+    try {
+      // Look for file input in Snapchat's camera/upload area
+      // Common selectors for file inputs in web apps
+      const fileInputSelectors = [
+        'input[type="file"][accept*="image"]',
+        'input[type="file"]',
+        '[data-testid*="file"]',
+        '[data-testid*="upload"]',
+        '.file-input',
+        '#file-input'
+      ];
+      
+      let fileInput = null;
+      for (const selector of fileInputSelectors) {
+        fileInput = document.querySelector(selector);
+        if (fileInput) break;
+      }
+      
+      if (!fileInput) {
+        log('Could not find file input for photo upload');
+        return false;
+      }
+      
+      // Convert data URL to File object
+      const response = await fetch(photoDataUrl);
+      const blob = await response.blob();
+      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      
+      // Create a new FileList with our file
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+      
+      // Trigger change event
+      const changeEvent = new Event('change', { bubbles: true });
+      fileInput.dispatchEvent(changeEvent);
+      
+      // If description exists, try to find caption/description field and set it
+      if (description) {
+        setTimeout(() => {
+          const captionSelectors = [
+            'textarea[placeholder*="caption"]',
+            'textarea[placeholder*="description"]',
+            'textarea[placeholder*="add"]',
+            'input[type="text"][placeholder*="caption"]',
+            '[contenteditable="true"]',
+            '[data-testid*="caption"]'
+          ];
+          
+          for (const selector of captionSelectors) {
+            const captionField = document.querySelector(selector);
+            if (captionField) {
+              if (captionField.tagName === 'TEXTAREA' || captionField.tagName === 'INPUT') {
+                captionField.value = description;
+                captionField.dispatchEvent(new Event('input', { bubbles: true }));
+              } else if (captionField.contentEditable === 'true') {
+                captionField.textContent = description;
+                captionField.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              break;
+            }
+          }
+        }, 500); // Wait a bit for upload UI to appear
+      }
+      
+      // After injecting photo, wait a bit then try to click photo send button and click out
+      setTimeout(async () => {
+        // Click photo send button (different from text message send button)
+        await clickPhotoSendButton();
+        
+        // Click out after sending
+        await clickOutAfterSend();
+      }, 1000); // Wait for photo preview to appear
+      
+      log('Photo injected successfully');
+      return true;
+      
+    } catch (e) {
+      log('Error injecting photo: ' + e);
+      return false;
+    }
+  }
+  
+  // ============================================
+  // MESSAGE SENDING - Type and send messages in Snapchat
+  // ============================================
+  // Based on recording: message input -> type -> click SVG send button -> click out
+  // ============================================
+  
+  // Find message input field
+  async function findMessageInput() {
+    const inputSelectors = [
+      'textarea[placeholder*="Chat"]',
+      'textarea[placeholder*="Message"]',
+      'textarea[placeholder*="Say something"]',
+      'textarea[data-testid*="message"]',
+      'textarea[data-testid*="input"]',
+      '[contenteditable="true"][data-testid*="message"]',
+      '[contenteditable="true"][data-testid*="input"]',
+      '[contenteditable="true"][role="textbox"]',
+      'textarea',
+      '[contenteditable="true"]'
+    ];
+    
+    for (const selector of inputSelectors) {
+      const input = document.querySelector(selector);
+      if (input && input.offsetParent !== null) { // Check if visible
+        // Verify it's actually the message input (not a caption field, etc.)
+        const rect = input.getBoundingClientRect();
+        if (rect.width > 100 && rect.height > 20) { // Reasonable size for message input
+          return input;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  // Type text into message input (simulates human typing)
+  async function typeMessage(text, inputElement) {
+    try {
+      if (!inputElement) {
+        inputElement = await findMessageInput();
+        if (!inputElement) {
+          log('Could not find message input');
+          return false;
+        }
+      }
+      
+      // Focus the input
+      inputElement.focus();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Clear existing content
+      if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
+        inputElement.value = '';
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+      } else if (inputElement.contentEditable === 'true') {
+        inputElement.textContent = '';
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Type character by character (simulates human typing)
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        
+        if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
+          inputElement.value += char;
+          inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (inputElement.contentEditable === 'true') {
+          inputElement.textContent += char;
+          inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        // Random delay between characters (30-80ms for natural typing)
+        await new Promise(resolve => setTimeout(resolve, 30 + Math.random() * 50));
+      }
+      
+      // Trigger final input event
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+      inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      log('Typed message: ' + text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+      return true;
+      
+    } catch (e) {
+      log('Error typing message: ' + e);
+      return false;
+    }
+  }
+  
+  // Find and click the photo send button (different from text message send button)
+  async function clickPhotoSendButton() {
+    try {
+      // Wait a bit for photo send button to appear after photo is selected
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Photo send button is typically a DIV or button near the photo preview
+      // Based on recording: it's a DIV element
+      const photoSendSelectors = [
+        'div[role="button"][aria-label*="Send" i]',
+        'div[role="button"][aria-label*="send" i]',
+        'button[aria-label*="Send photo" i]',
+        'button[aria-label*="Send image" i]',
+        'button[aria-label*="Send snap" i]',
+        'div[data-testid*="send-photo" i]',
+        'div[data-testid*="send-image" i]',
+        'div[data-testid*="send-snap" i]',
+        'button[data-testid*="send-photo" i]',
+        'button[data-testid*="send-image" i]',
+        'button[data-testid*="send-snap" i]'
+      ];
+      
+      // Also look for DIV elements that might be the send button
+      // Check for clickable divs near photo preview area
+      const allDivs = document.querySelectorAll('div[role="button"], div[onclick], div[style*="cursor: pointer"]');
+      for (const div of allDivs) {
+        const ariaLabel = div.getAttribute('aria-label') || '';
+        const text = div.textContent || '';
+        const rect = div.getBoundingClientRect();
+        
+        // Check if it's visible and might be a send button
+        if (div.offsetParent !== null && rect.width > 0 && rect.height > 0) {
+          if (ariaLabel.toLowerCase().includes('send') || 
+              text.toLowerCase().includes('send') ||
+              ariaLabel.toLowerCase().includes('photo') ||
+              ariaLabel.toLowerCase().includes('snap')) {
+            div.click();
+            log('Clicked photo send button (DIV): ' + ariaLabel);
+            return true;
+          }
+        }
+      }
+      
+      // Try standard selectors
+      for (const selector of photoSendSelectors) {
+        try {
+          const element = document.querySelector(selector);
+          if (element && element.offsetParent !== null) {
+            element.click();
+            log('Clicked photo send button: ' + selector);
+            return true;
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+      
+      // Fallback: look for any button or div with "send" in aria-label near bottom of screen
+      // Photo send buttons are usually at the bottom
+      const viewportHeight = window.innerHeight;
+      const allElements = document.querySelectorAll('button, div[role="button"], div[onclick]');
+      for (const el of allElements) {
+        const rect = el.getBoundingClientRect();
+        const ariaLabel = el.getAttribute('aria-label') || '';
+        
+        // Check if it's in the bottom portion of screen and has "send" in label
+        if (rect.top > viewportHeight * 0.7 && 
+            rect.top < viewportHeight &&
+            el.offsetParent !== null &&
+            (ariaLabel.toLowerCase().includes('send') || ariaLabel.toLowerCase().includes('photo'))) {
+          el.click();
+          log('Clicked photo send button (fallback): ' + ariaLabel);
+          return true;
+        }
+      }
+      
+      log('Could not find photo send button');
+      return false;
+      
+    } catch (e) {
+      log('Error clicking photo send button: ' + e);
+      return false;
+    }
+  }
+  
+  // Find and click the text message send button (SVG element based on recording)
+  async function clickSendButton() {
+    try {
+      // Wait a bit for send button to become active after typing
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Look for send button - SVG or button near the message input
+      const sendButtonSelectors = [
+        'button[aria-label*="Send" i]',
+        'button[aria-label*="Send message" i]',
+        'button[data-testid*="send" i]',
+        'button svg[aria-label*="Send" i]',
+        'button svg[aria-label*="send" i]',
+        'svg[aria-label*="Send" i]',
+        'svg[aria-label*="send" i]',
+        'button:has(svg)',
+        '[role="button"][aria-label*="Send" i]'
+      ];
+      
+      // Also try finding button near message input
+      const messageInput = await findMessageInput();
+      if (messageInput) {
+        const parent = messageInput.closest('div, form, section');
+        if (parent) {
+          const nearbyButtons = parent.querySelectorAll('button svg, button[aria-label], svg[aria-label]');
+          for (const btn of nearbyButtons) {
+            const ariaLabel = btn.getAttribute('aria-label') || '';
+            const text = btn.textContent || '';
+            if (ariaLabel.toLowerCase().includes('send') || text.toLowerCase().includes('send')) {
+              if (btn.tagName === 'BUTTON') {
+                btn.click();
+                log('Clicked send button (found near input)');
+                return true;
+              } else if (btn.tagName === 'SVG') {
+                const button = btn.closest('button');
+                if (button) {
+                  button.click();
+                  log('Clicked send button (SVG near input)');
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Try standard selectors
+      for (const selector of sendButtonSelectors) {
+        try {
+          const element = document.querySelector(selector);
+          if (element && element.offsetParent !== null) {
+            if (element.tagName === 'BUTTON') {
+              element.click();
+              log('Clicked send button: ' + selector);
+              return true;
+            } else if (element.tagName === 'SVG') {
+              const button = element.closest('button');
+              if (button) {
+                button.click();
+                log('Clicked send button (SVG): ' + selector);
+                return true;
+              } else {
+                element.click();
+                log('Clicked send SVG directly');
+                return true;
+              }
+            }
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+      
+      log('Could not find send button');
+      return false;
+      
+    } catch (e) {
+      log('Error clicking send button: ' + e);
+      return false;
+    }
+  }
+  
+  // Click out/away after sending (clears input or closes any modals)
+  async function clickOutAfterSend() {
+    try {
+      // Wait a moment for message to send
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Click on a neutral area (chat area, not on input or buttons)
+      // Try clicking on the chat message area
+      const chatAreaSelectors = [
+        '[data-testid*="message-list"]',
+        '[data-testid*="chat"]',
+        '.chat-container',
+        'main',
+        'body'
+      ];
+      
+      for (const selector of chatAreaSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element !== document.body) {
+          const rect = element.getBoundingClientRect();
+          // Click in the middle of the element, avoiding edges
+          const x = rect.left + rect.width * 0.5;
+          const y = rect.top + rect.height * 0.3; // Upper middle area
+          
+          element.dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y
+          }));
+          
+          log('Clicked out after send');
+          return true;
+        }
+      }
+      
+      // Fallback: just blur the input
+      const input = await findMessageInput();
+      if (input) {
+        input.blur();
+      }
+      
+      return true;
+      
+    } catch (e) {
+      log('Error clicking out: ' + e);
+      return false;
+    }
+  }
+  
+  // Send a text message (complete function)
+  async function sendTextMessage(messageText) {
+    try {
+      log('Sending message: ' + messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''));
+      
+      // Step 1: Find and type in message input
+      const typed = await typeMessage(messageText);
+      if (!typed) {
+        return false;
+      }
+      
+      // Step 2: Click send button
+      const sent = await clickSendButton();
+      if (!sent) {
+        return false;
+      }
+      
+      // Step 3: Click out/away after sending
+      await clickOutAfterSend();
+      
+      log('Message sent successfully');
+      return true;
+      
+    } catch (e) {
+      log('Error sending message: ' + e);
+      return false;
+    }
+  }
+  
+  // Send photo to user (high-level function)
+  async function sendPhotoToUser(userId, context = {}) {
+    try {
+      const photoData = await selectPhotoForUser(userId, context);
+      if (!photoData) {
+        log('No photo available to send');
+        return false;
+      }
+      
+      const { photo, category } = photoData;
+      
+      // Inject photo into Snapchat
+      const injected = await injectPhotoToSnapchat(photo.dataUrl, photo.description || '');
+      if (!injected) {
+        return false;
+      }
+      
+      // Mark photo as sent to this user (prevents reuse)
+      await markPhotoSentToUser(userId, photo.id);
+      
+      log('Photo sent to user: ' + userId + ' (category: ' + category + ')');
+      return true;
+      
+    } catch (e) {
+      log('Error sending photo: ' + e);
+      return false;
+    }
+  }
+  
+  // ============================================
+  // PHASE-BASED PHOTO SENDING
+  // ============================================
+  // Determine current phase and decide if we should send photo
+  // based on the photo rate percentage set for that phase
+  // ============================================
+  
+  // Get current phase for a conversation based on message exchanges
+  async function getCurrentPhase(userId, messageExchanges) {
+    try {
+      const settings = await chrome.storage.sync.get([
+        'phase1MinExchanges', 'phase1PhotoRate',
+        'phase2MinExchanges', 'phase2PhotoRate',
+        'additionalPhases'
+      ]);
+      
+      // Check Phase 1
+      if (messageExchanges < (settings.phase2MinExchanges || 5)) {
+        return {
+          phaseNumber: 1,
+          minExchanges: settings.phase1MinExchanges || 0,
+          photoRate: settings.phase1PhotoRate || 0
+        };
+      }
+      
+      // Check additional phases
+      const additionalPhases = settings.additionalPhases || [];
+      for (let i = 0; i < additionalPhases.length; i++) {
+        const phase = additionalPhases[i];
+        const nextPhaseMin = i < additionalPhases.length - 1 
+          ? additionalPhases[i + 1].minExchanges 
+          : Infinity;
+        
+        if (messageExchanges >= phase.minExchanges && messageExchanges < nextPhaseMin) {
+          return {
+            phaseNumber: i + 3, // Phase 3, 4, 5...
+            minExchanges: phase.minExchanges,
+            photoRate: phase.photoRate || 0
+          };
+        }
+      }
+      
+      // Phase 2 (default if past Phase 1 but no additional phases)
+      if (messageExchanges >= (settings.phase2MinExchanges || 5)) {
+        return {
+          phaseNumber: 2,
+          minExchanges: settings.phase2MinExchanges || 5,
+          photoRate: settings.phase2PhotoRate || 0
+        };
+      }
+      
+      // Default to Phase 1
+      return {
+        phaseNumber: 1,
+        minExchanges: settings.phase1MinExchanges || 0,
+        photoRate: settings.phase1PhotoRate || 0
+      };
+      
+    } catch (e) {
+      log('Error getting current phase: ' + e);
+      return {
+        phaseNumber: 1,
+        minExchanges: 0,
+        photoRate: 0
+      };
+    }
+  }
+  
+  // Check if we should send a photo based on phase photo rate percentage
+  async function shouldSendPhotoBasedOnPhase(userId, messageExchanges) {
+    try {
+      const settings = await chrome.storage.sync.get(['photosEnabled']);
+      if (!settings.photosEnabled) {
+        return { shouldSend: false, reason: 'Photos disabled' };
+      }
+      
+      const currentPhase = await getCurrentPhase(userId, messageExchanges);
+      const photoRate = currentPhase.photoRate || 0;
+      
+      if (photoRate <= 0) {
+        return { shouldSend: false, reason: 'Photo rate is 0% for Phase ' + currentPhase.phaseNumber };
+      }
+      
+      // Generate random number 0-100 and check if it's below the photo rate
+      const randomChance = Math.random() * 100;
+      const shouldSend = randomChance < photoRate;
+      
+      return {
+        shouldSend: shouldSend,
+        reason: shouldSend 
+          ? 'Photo rate check passed (' + photoRate + '% chance in Phase ' + currentPhase.phaseNumber + ')'
+          : 'Photo rate check failed (' + randomChance.toFixed(1) + '% > ' + photoRate + '% for Phase ' + currentPhase.phaseNumber + ')',
+        phase: currentPhase
+      };
+      
+    } catch (e) {
+      log('Error checking phase photo rate: ' + e);
+      return { shouldSend: false, reason: 'Error: ' + e };
+    }
+  }
+  
+  // Check if all phases are complete and we should ask for CTA
+  async function shouldAskForCTAAfterPhases(userId, messageExchanges) {
+    try {
+      const settings = await chrome.storage.sync.get([
+        'askCTAAfterPhases', 'phase1MinExchanges', 'phase2MinExchanges', 'additionalPhases'
+      ]);
+      
+      if (!settings.askCTAAfterPhases) {
+        return { shouldAsk: false, reason: 'CTA after phases disabled' };
+      }
+      
+      // Find the highest phase requirement
+      const allPhases = [
+        { minExchanges: settings.phase1MinExchanges || 0 },
+        { minExchanges: settings.phase2MinExchanges || 5 },
+        ...(settings.additionalPhases || [])
+      ];
+      
+      const maxPhaseExchanges = Math.max(...allPhases.map(p => p.minExchanges || 0));
+      
+      // If we've passed all phase requirements, ask for CTA
+      if (messageExchanges >= maxPhaseExchanges) {
+        return { 
+          shouldAsk: true, 
+          reason: 'All phases complete (' + messageExchanges + ' exchanges >= ' + maxPhaseExchanges + ')' 
+        };
+      }
+      
+      return { 
+        shouldAsk: false, 
+        reason: 'Still in phases (' + messageExchanges + ' exchanges < ' + maxPhaseExchanges + ')' 
+      };
+      
+    } catch (e) {
+      log('Error checking CTA after phases: ' + e);
+      return { shouldAsk: false, reason: 'Error: ' + e };
+    }
+  }
+  
   // AI-powered name detection cache
   const aiNameCache = new Map();
   
