@@ -43,6 +43,13 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   let acceptedToday = 0;
   let lastHourTimestamp = 0;
   let lastDayTimestamp = 0;
+  
+  // Friend adding counters (separate from friend request accepting)
+  let friendsAddedThisHour = 0;
+  let friendsAddedToday = 0;
+  let friendsAddedCount = 0; // For pause after X adds
+  let lastFriendAddHourTimestamp = 0;
+  let lastFriendAddDayTimestamp = '';
 
   // Load rate limit data from storage
   async function loadRateLimits() {
@@ -2513,6 +2520,216 @@ SEXUAL:YES`;
   }
 
   // Main run loop
+  // ============================================
+  // FRIEND ADDING FUNCTIONS (Quick Add)
+  // ============================================
+  
+  // Load friend adding rate limits
+  async function loadFriendAddLimits() {
+    try {
+      const data = await chrome.storage.local.get([
+        'friendsAddedToday', 'friendsAddedThisHour', 
+        'lastFriendAddHourTimestamp', 'lastFriendAddDayTimestamp'
+      ]);
+      const now = Date.now();
+      const today = new Date().toDateString();
+      const currentHour = Math.floor(now / (60 * 60 * 1000));
+      
+      if (data.lastFriendAddDayTimestamp !== today) {
+        friendsAddedToday = 0;
+        lastFriendAddDayTimestamp = today;
+      } else {
+        friendsAddedToday = data.friendsAddedToday || 0;
+        lastFriendAddDayTimestamp = data.lastFriendAddDayTimestamp || today;
+      }
+      
+      if (data.lastFriendAddHourTimestamp !== currentHour) {
+        friendsAddedThisHour = 0;
+        lastFriendAddHourTimestamp = currentHour;
+      } else {
+        friendsAddedThisHour = data.friendsAddedThisHour || 0;
+        lastFriendAddHourTimestamp = data.lastFriendAddHourTimestamp || currentHour;
+      }
+      
+      await chrome.storage.local.set({
+        friendsAddedToday: friendsAddedToday,
+        friendsAddedThisHour: friendsAddedThisHour,
+        lastFriendAddHourTimestamp: lastFriendAddHourTimestamp,
+        lastFriendAddDayTimestamp: lastFriendAddDayTimestamp
+      });
+    } catch (e) {
+      console.log('Error loading friend add limits:', e);
+    }
+  }
+  
+  // Check if we can add more friends (hourly and daily limits)
+  function canAddMoreFriends() {
+    if (!settings) return false;
+    const maxPerHour = settings.maxFriendsPerHour || 15;
+    const maxPerDay = settings.maxFriendsPerDay || 50;
+    
+    if (friendsAddedThisHour >= maxPerHour) {
+      log('Friend add hourly limit reached: ' + friendsAddedThisHour + '/' + maxPerHour);
+      return false;
+    }
+    
+    if (friendsAddedToday >= maxPerDay) {
+      log('Friend add daily limit reached: ' + friendsAddedToday + '/' + maxPerDay);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  // Increment friend add counters
+  async function incrementFriendAddCount() {
+    friendsAddedCount++;
+    friendsAddedThisHour++;
+    friendsAddedToday++;
+    
+    const now = Date.now();
+    const today = new Date().toDateString();
+    const currentHour = Math.floor(now / (60 * 60 * 1000));
+    
+    await chrome.storage.local.set({
+      friendsAddedThisHour: friendsAddedThisHour,
+      friendsAddedToday: friendsAddedToday,
+      lastFriendAddHourTimestamp: currentHour,
+      lastFriendAddDayTimestamp: today
+    });
+    
+    log('Friends added - This hour: ' + friendsAddedThisHour + ', Today: ' + friendsAddedToday);
+  }
+  
+  // Find "Add" buttons in Quick Add section
+  function findAddButtons() {
+    const addButtons = [];
+    
+    // Look for buttons with "Add" text or aria-label
+    const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'))
+      .filter(btn => btn.offsetParent !== null); // Only visible buttons
+    
+    for (const btn of allButtons) {
+      const text = (btn.textContent || '').trim().toLowerCase();
+      const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+      const title = (btn.getAttribute('title') || '').toLowerCase();
+      
+      // Check if it's an Add button (not Accept, not X/Close, not Send, etc.)
+      if ((text === 'add' || ariaLabel.includes('add') || title.includes('add')) &&
+          !text.includes('accept') && 
+          !text.includes('decline') &&
+          !text.includes('ignore') &&
+          !text.includes('send') &&
+          !text.includes('close') &&
+          !ariaLabel.includes('accept') &&
+          !ariaLabel.includes('decline')) {
+        
+        // Make sure it's in a friend entry (has name/username nearby)
+        const container = btn.closest('div[class*="entry"], div[class*="item"], div[class*="card"]') || 
+                         btn.parentElement?.parentElement;
+        if (container) {
+          addButtons.push({ button: btn, container: container });
+        }
+      }
+    }
+    
+    return addButtons;
+  }
+  
+  // Add a friend (click Add button)
+  async function addFriend(addEntry) {
+    try {
+      if (!canAddMoreFriends()) {
+        return { success: false, reason: 'limit' };
+      }
+      
+      log('Clicking Add button...');
+      const clicked = await click(addEntry.button);
+      if (clicked) {
+        await incrementFriendAddCount();
+        return { success: true };
+      }
+      return { success: false, reason: 'click failed' };
+    } catch (e) {
+      log('Error adding friend: ' + e);
+      return { success: false, reason: 'error: ' + e };
+    }
+  }
+  
+  // Friend adding loop with all limits
+  async function runFriendAdding() {
+    if (!isRunning || !settings.autoAddFriends) return;
+    
+    await loadFriendAddLimits();
+    friendsAddedCount = 0; // Reset pause counter
+    
+    log('Starting friend adding mode...');
+    updateStatus('Adding friends from Quick Add...', 'running');
+    
+    let added = 0;
+    let skipped = 0;
+    
+    while (isRunning) {
+      // Check hourly/daily limits
+      if (!canAddMoreFriends()) {
+        log('Friend add limits reached - stopping');
+        break;
+      }
+      
+      // Find Add buttons
+      const addButtons = findAddButtons();
+      if (addButtons.length === 0) {
+        log('No Add buttons found, waiting...');
+        await delay(3000);
+        continue;
+      }
+      
+      log('Found ' + addButtons.length + ' Add buttons');
+      
+      // Process Add buttons
+      for (const addEntry of addButtons) {
+        if (!isRunning || !canAddMoreFriends()) break;
+        
+        const result = await addFriend(addEntry);
+        if (result.success) {
+          added++;
+          
+          // Check if we need to pause AFTER X adds
+          if (settings.pauseAfterAdds && 
+              friendsAddedCount > 0 && 
+              friendsAddedCount % settings.pauseAfterAddsCount === 0) {
+            const pauseMins = settings.pauseAfterAddsDuration || 10;
+            log('Pausing for ' + pauseMins + ' minutes after ' + friendsAddedCount + ' adds');
+            updateStatus('Pausing for ' + pauseMins + ' mins (added ' + friendsAddedCount + ' friends)', 'running');
+            await delay(pauseMins * 60 * 1000);
+            if (!isRunning) break;
+          }
+          
+          // Random delay between adds
+          const delaySec = randDelay(
+            (settings.friendAddMinDelay || 30) * 1000,
+            (settings.friendAddMaxDelay || 120) * 1000
+          );
+          log('Waiting ' + (delaySec / 1000) + ' seconds before next add...');
+          await delay(delaySec);
+        } else if (result.reason === 'limit') {
+          break; // Break out of loop if limit reached
+        } else {
+          skipped++;
+        }
+        
+        await delay(randDelay(500, 1000));
+      }
+      
+      // Scroll to find more
+      window.scrollBy(0, 400);
+      await delay(2000);
+    }
+    
+    log('Friend adding stopped. Added: ' + added + ', Skipped: ' + skipped);
+    updateStatus('Friend adding stopped - Added: ' + added, 'stopped');
+  }
+  
   async function run() {
     if (!isRunning) return;
     
@@ -2562,6 +2779,15 @@ SEXUAL:YES`;
     // Don't clear processed - allow re-runs to skip already processed
     // processed.clear();
     
+    // Check which mode we're in
+    if (settings.friendsAddEnabled && settings.autoAddFriends) {
+      // Friend adding mode
+      await runFriendAdding();
+      isRunning = false;
+      return;
+    }
+    
+    // Friend request filtering mode (existing code)
     let entries = findEntries();
     if (entries.length === 0) {
       await openFriendRequests();

@@ -906,7 +906,7 @@
         <div class="toggle-row">
           <label>Remove non-responders after X days</label>
           <label class="switch">
-            <input type="checkbox" id="removeNonResponders">
+            <input type="checkbox" id="removeNonResponders" onchange="toggleConditional('removeAfterDaysDetails', this.checked)">
             <span class="slider"></span>
           </label>
         </div>
@@ -1808,12 +1808,13 @@
     </div>
     
     <!-- ========== FILTERS ========== -->
-    <div class="section collapsed" id="sectionFilters">
+    <div class="section" id="sectionFilters">
       <div class="section-header" onclick="toggleSection('sectionFilters')">
         <span class="section-title"><span class="icon">🔍</span>Name Filters</span>
         <span class="section-toggle">▼</span>
       </div>
       <div class="section-content">
+        <div class="help" style="margin-bottom:10px;">Uncheck Hispanic/Mexican to allow them, but still block other non-Americans.</div>
     <label class="checkbox">
       <input type="checkbox" id="filterNonAmerican" checked>
       Decline non-American names
@@ -1821,7 +1822,7 @@
         <label class="checkbox">
           <input type="checkbox" id="filterHispanic" checked>
           Decline Hispanic/Mexican names
-    </label>
+        </label>
     <label class="checkbox">
       <input type="checkbox" id="filterBrownEmoji" checked>
       Decline brown emoji profiles

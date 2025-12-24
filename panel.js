@@ -243,6 +243,9 @@ function applySettingsToUI(s) {
   setVal('pauseAfterAddsCount', s.pauseAfterAddsCount);
   setVal('pauseAfterAddsDuration', s.pauseAfterAddsDuration);
   
+  // Toggle conditional section for remove non-responders
+  toggleConditional('removeAfterDaysDetails', s.removeNonResponders);
+  
   // Scheduling & Anti-bot
   setChecked('enableSchedule', s.enableSchedule);
   setVal('scheduleStart', s.scheduleStart);
@@ -642,6 +645,7 @@ function toggleConditional(id, show) {
     else el.classList.remove('show');
   }
 }
+window.toggleConditional = toggleConditional;
 
 // Gender toggle
 function setGender(gender) {
