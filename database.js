@@ -510,5 +510,5 @@ async function exportDatabase() {
       exportDatabase
     };
   }
-})(); // Close the IIFE
+}
 

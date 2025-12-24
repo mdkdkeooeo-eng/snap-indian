@@ -4092,11 +4092,12 @@ SEXUAL:YES`;
       isRunning = true;
       processed.clear();
       saveRunningState().then(() => {
-      run().catch(err => {
-        console.error('[SF] Error in run():', err);
-        isRunning = false;
-        saveRunningState().then(() => {
-          updateStatus('Error: ' + err.message, 'error');
+        run().catch(err => {
+          console.error('[SF] Error in run():', err);
+          isRunning = false;
+          saveRunningState().then(() => {
+            updateStatus('Error: ' + err.message, 'error');
+          });
         });
       });
       respond({ success: true });
