@@ -345,6 +345,7 @@ function applySettingsToUI(s) {
   setVal('friendAddMaxDelay', s.friendAddMaxDelay);
   setVal('maxFriendsPerHour', s.maxFriendsPerHour);
   setVal('maxFriendsPerDay', s.maxFriendsPerDay);
+  setChecked('autoResume', s.autoResume);
   setChecked('pauseAfterAdds', s.pauseAfterAdds);
   setVal('pauseAfterAddsCount', s.pauseAfterAddsCount);
   setVal('pauseAfterAddsDuration', s.pauseAfterAddsDuration);
@@ -402,19 +403,35 @@ function applySettingsToUI(s) {
   setVal('hairColor', s.hairColor);
   setVal('eyeColor', s.eyeColor);
   setVal('bodyType', s.bodyType);
+  setVal('height', s.height);
+  setVal('measurements', s.measurements);
+  setVal('ethnicity', s.ethnicity);
   setChecked('hasTattoos', s.hasTattoos);
   setVal('tattooDesc', s.tattooDesc);
+  setVal('tattooQuestions', s.tattooQuestions);
   setChecked('hasPiercings', s.hasPiercings);
   setVal('piercingDesc', s.piercingDesc);
-  if (s.hasTattoos) toggleConditional('tattoosDetails', true);
-  if (s.hasPiercings) toggleConditional('piercingsDetails', true);
+  setVal('piercingQuestions', s.piercingQuestions);
+  if (s.hasTattoos) toggleConditional('tattooDetails', true);
+  if (s.hasPiercings) toggleConditional('piercingDetails', true);
   
+  // Background
+  setVal('occupation', s.occupation);
+  setVal('education', s.education);
+  setVal('relationshipStatus', s.relationshipStatus);
+  setVal('personalityTraits', s.personalityTraits);
+  setVal('goals', s.goals);
+  setVal('funFacts', s.funFacts);
+
   // Interests
   setVal('hobbies', s.hobbies);
   setChecked('playsGames', s.playsGames);
   setVal('gamesList', s.gamesList);
   setVal('musicTaste', s.musicTaste);
   setVal('showsMovies', s.showsMovies);
+  setVal('favoriteFoods', s.favoriteFoods);
+  setVal('drinkingHabits', s.drinkingHabits);
+  setVal('smokingHabits', s.smokingHabits);
   if (s.playsGames) toggleConditional('gamesDetails', true);
   
   // CTA
@@ -930,6 +947,7 @@ function saveSettings() {
     friendAddMaxDelay: getInt('friendAddMaxDelay', 120),
     maxFriendsPerHour: getInt('maxFriendsPerHour', 15),
     maxFriendsPerDay: getInt('maxFriendsPerDay', 50),
+    autoResume: getChecked('autoResume'),
     pauseAfterAdds: getChecked('pauseAfterAdds'),
     pauseAfterAddsCount: getInt('pauseAfterAddsCount', 5),
     pauseAfterAddsDuration: getInt('pauseAfterAddsDuration', 10),
@@ -974,17 +992,33 @@ function saveSettings() {
     hairColor: getVal('hairColor'),
     eyeColor: getVal('eyeColor'),
     bodyType: getVal('bodyType'),
+    height: getVal('height'),
+    measurements: getVal('measurements'),
+    ethnicity: getVal('ethnicity'),
     hasTattoos: getChecked('hasTattoos'),
     tattooDesc: getVal('tattooDesc'),
+    tattooQuestions: getVal('tattooQuestions'),
     hasPiercings: getChecked('hasPiercings'),
     piercingDesc: getVal('piercingDesc'),
+    piercingQuestions: getVal('piercingQuestions'),
     
+    // Background
+    occupation: getVal('occupation'),
+    education: getVal('education'),
+    relationshipStatus: getVal('relationshipStatus'),
+    personalityTraits: getVal('personalityTraits'),
+    goals: getVal('goals'),
+    funFacts: getVal('funFacts'),
+
     // Interests
     hobbies: getVal('hobbies'),
     playsGames: getChecked('playsGames'),
     gamesList: getVal('gamesList'),
     musicTaste: getVal('musicTaste'),
     showsMovies: getVal('showsMovies'),
+    favoriteFoods: getVal('favoriteFoods'),
+    drinkingHabits: getVal('drinkingHabits'),
+    smokingHabits: getVal('smokingHabits'),
     
     // CTA
     ctaPlatform: getVal('ctaPlatform'),
@@ -1141,12 +1175,7 @@ function sendMessage(action, data = {}) {
   });
 }
 
-// Listen for log messages from content script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'logToPanel') {
-    addToActivityLog(message.type || 'info', message.message);
-  }
-});
+// Combined message listener for both log and status messages
 
 // Start button - attach directly like working version
 document.getElementById('startBtn')?.addEventListener('click', async () => {
@@ -1896,9 +1925,16 @@ document.getElementById('refreshConvosBtn')?.addEventListener('click', () => {
 setTimeout(loadAnalytics, 500);
 setInterval(loadAnalytics, 30000); // Every 30 seconds
 
-// Listen for status updates from content script
+// Listen for messages from content script
 chrome.runtime.onMessage.addListener((msg) => {
+  console.log('Panel received message:', msg.action, msg);
+
+  if (msg.action === 'logToPanel') {
+    addToActivityLog(msg.type || 'info', msg.message);
+  }
+
   if (msg.action === 'statusUpdate') {
+    console.log('Updating status:', msg.status, msg.message);
     updateStatus(msg.status, msg.message);
     if (msg.status === 'stopped' || msg.status === 'error' || msg.status === 'warning') {
       document.getElementById('startBtn').disabled = false;
@@ -1918,6 +1954,194 @@ chrome.runtime.onMessage.addListener((msg) => {
     }
     updateLimitDisplays();
   }
+});
+
+// Export settings as JSON file
+async function exportSettings(tabType) {
+  try {
+    // Get all current settings
+    const allSettings = await chrome.storage.sync.get();
+
+    // Create export data with metadata
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      exportedFrom: tabType + 'Tab',
+      version: '2.1.0',
+      settings: allSettings
+    };
+
+    // Convert to JSON
+    const jsonStr = JSON.stringify(exportData, null, 2);
+
+    // Create download
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapchat-filter-${tabType}-settings-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    updateStatus('success', `Settings exported from ${tabType} tab!`);
+  } catch (e) {
+    updateStatus('error', 'Failed to export settings: ' + e.message);
+  }
+}
+
+// Save settings buttons
+document.getElementById('saveSettingsAddBtn')?.addEventListener('click', () => exportSettings('add'));
+document.getElementById('saveSettingsChatBtn')?.addEventListener('click', () => exportSettings('chat'));
+
+// Global save all settings button
+document.getElementById('saveAllSettingsBtn')?.addEventListener('click', async () => {
+  try {
+    const settings = saveSettings();
+    updateStatus('success', 'All settings saved successfully!');
+    console.log('Settings saved:', settings);
+  } catch (e) {
+    updateStatus('error', 'Failed to save settings: ' + e.message);
+  }
+});
+
+// Auto-save settings when panel loses focus (user closes panel)
+window.addEventListener('beforeunload', () => {
+  try {
+    saveSettings();
+  } catch (e) {
+    console.error('Failed to auto-save settings on close:', e);
+  }
+});
+
+// Name blacklist management
+let nameBlacklist = [];
+
+async function loadBlacklist() {
+  try {
+    const data = await chrome.storage.local.get('nameBlacklist');
+    nameBlacklist = data.nameBlacklist || [];
+    updateBlacklistDisplay();
+  } catch (e) {
+    console.error('Failed to load blacklist:', e);
+  }
+}
+
+async function saveBlacklist() {
+  try {
+    await chrome.storage.local.set({ nameBlacklist });
+    console.log('Blacklist saved');
+  } catch (e) {
+    console.error('Failed to save blacklist:', e);
+  }
+}
+
+function updateBlacklistDisplay() {
+  const container = document.getElementById('blacklistContainer');
+  if (!container) return;
+
+  if (nameBlacklist.length === 0) {
+    container.innerHTML = '<div style="color:#666;font-style:italic;font-size:11px;">No blacklisted names yet</div>';
+    return;
+  }
+
+  container.innerHTML = nameBlacklist.map(name => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;margin-bottom:2px;background:#2a2a2a;border-radius:3px;font-size:11px;">
+      <span style="color:#fff;">${name}</span>
+      <button onclick="removeFromBlacklist('${name}')" style="background:#f44336;color:#fff;border:none;border-radius:2px;padding:1px 4px;font-size:9px;cursor:pointer;">✕</button>
+    </div>
+  `).join('');
+}
+
+async function addToBlacklist(name) {
+  const cleanName = name.trim().toLowerCase();
+  if (!cleanName) return;
+
+  if (nameBlacklist.includes(cleanName)) {
+    updateStatus('warning', 'Name already in blacklist');
+    return;
+  }
+
+  nameBlacklist.push(cleanName);
+  await saveBlacklist();
+  updateBlacklistDisplay();
+  updateStatus('success', `Added "${cleanName}" to blacklist`);
+
+  // Clear input
+  const input = document.getElementById('blacklistNameInput');
+  if (input) input.value = '';
+}
+
+async function removeFromBlacklist(name) {
+  nameBlacklist = nameBlacklist.filter(n => n !== name);
+  await saveBlacklist();
+  updateBlacklistDisplay();
+  updateStatus('success', `Removed "${name}" from blacklist`);
+}
+
+async function clearBlacklist() {
+  if (!confirm('Clear all blacklisted names? This cannot be undone.')) return;
+
+  nameBlacklist = [];
+  await saveBlacklist();
+  updateBlacklistDisplay();
+  updateStatus('success', 'Blacklist cleared');
+}
+
+// Make remove function globally available
+window.removeFromBlacklist = removeFromBlacklist;
+
+// Auto-save settings when form fields change (with debounce)
+let saveTimeout;
+function debouncedSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      saveSettings();
+      console.log('Settings auto-saved');
+    } catch (e) {
+      console.error('Failed to auto-save settings:', e);
+    }
+  }, 1000); // Save after 1 second of inactivity
+}
+
+// Add change listeners to all form elements
+function setupAutoSave() {
+  // Get all input, select, and textarea elements
+  const formElements = document.querySelectorAll('input, select, textarea');
+
+  formElements.forEach(element => {
+    // Skip certain elements that shouldn't trigger saves
+    if (element.id === 'importFile' || element.id === 'photoUpload') return;
+
+    element.addEventListener('change', debouncedSave);
+    element.addEventListener('input', debouncedSave);
+  });
+
+  console.log('Auto-save listeners attached to', formElements.length, 'form elements');
+}
+
+// Setup auto-save and blacklist when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  setupAutoSave();
+  loadBlacklist();
+
+  // Blacklist event listeners
+  document.getElementById('addBlacklistBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('blacklistNameInput');
+    if (input && input.value.trim()) {
+      addToBlacklist(input.value.trim());
+    }
+  });
+
+  document.getElementById('blacklistNameInput')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      const input = document.getElementById('blacklistNameInput');
+      if (input && input.value.trim()) {
+        addToBlacklist(input.value.trim());
+      }
+    }
+  });
+
+  document.getElementById('clearBlacklistBtn')?.addEventListener('click', clearBlacklist);
 });
 
 // Dynamic phase management

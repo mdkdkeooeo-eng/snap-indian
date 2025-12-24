@@ -228,9 +228,38 @@
     .btn-start:hover { background: #FFE500; }
     .btn-start:disabled { background: #444; color: #888; cursor: not-allowed; }
     .btn-stop { background: #f44336; color: #fff; }
-    .btn-stop:disabled { background: #444; color: #888; }
+    .btn-stop:disabled { background: #2196F3; color: #fff; }
     .btn-secondary { background: #333; color: #fff; }
     .btn-secondary:hover { background: #444; }
+
+    /* Status display */
+    .status {
+      font-weight: 500;
+    }
+    .status.running {
+      background: #1b5e20;
+      color: #81c784;
+      border: 1px solid #4caf50;
+    }
+    .status.stopped {
+      background: #2a2a2a;
+      color: #888;
+    }
+    .status.error {
+      background: #b71c1c;
+      color: #ef5350;
+      border: 1px solid #f44336;
+    }
+    .status.success {
+      background: #1b5e20;
+      color: #81c784;
+      border: 1px solid #4caf50;
+    }
+    .status.warning {
+      background: #f57c00;
+      color: #ffb74d;
+      border: 1px solid #ff9800;
+    }
     
     /* Stats */
     .stats-grid {
@@ -339,7 +368,18 @@
     <!-- Control Buttons (visible in both tabs) -->
     <button id="startBtn" class="btn-start">▶ Start</button>
     <button id="stopBtn" class="btn-stop" disabled>■ Stop</button>
-    
+
+    <!-- Status Display (shows bot activity logs) -->
+    <div id="status" class="status stopped" style="margin-top:10px;padding:10px;border-radius:6px;font-size:13px;text-align:center;background:#2a2a2a;color:#888;border:1px solid #444;min-height:20px;">Ready - Click Start to begin</div>
+
+    <!-- Global Save Button -->
+    <div style="margin-top:8px;text-align:center;">
+      <button id="saveAllSettingsBtn" class="btn-secondary" style="width:auto;padding:6px 12px;font-size:11px;">
+        💾 Save All Settings
+      </button>
+      <div class="help" style="margin-top:2px;font-size:9px;">Saves all current settings to browser storage</div>
+    </div>
+
     <!-- ========== ADD FRIENDS TAB ========== -->
     <div id="tabAdd" class="tab-content active">
       
@@ -384,6 +424,14 @@
               <input type="number" id="maxFriendsPerDay" value="50" min="1">
             </div>
           </div>
+          <div class="toggle-row">
+            <label>Auto-resume after browser crash</label>
+            <label class="switch">
+              <input type="checkbox" id="autoResume">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="help" style="margin-top:4px;">When disabled, bot stays off after crashes or browser restarts</div>
         </div>
       </div>
       
@@ -561,7 +609,34 @@
           </div>
         </div>
       </div>
-      
+
+      <!-- Name Blacklist -->
+      <div class="section collapsed" id="sectionBlacklist">
+        <div class="section-header" onclick="toggleSection('sectionBlacklist')">
+          <span class="section-title">🚫 Name Blacklist</span>
+          <span class="section-toggle">▼</span>
+        </div>
+        <div class="section-content">
+          <div class="help" style="margin-bottom:10px;">Add specific names to always decline (overrides other filters)</div>
+
+          <!-- Add Name Input -->
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="blacklistNameInput" placeholder="Enter name to blacklist" style="flex:1;">
+            <button id="addBlacklistBtn" class="btn-secondary" style="padding:8px 12px;">➕ Add</button>
+          </div>
+
+          <!-- Blacklist Display -->
+          <div id="blacklistContainer" style="background:#1a1a1a;padding:8px;border-radius:4px;max-height:150px;overflow-y:auto;">
+            <div style="color:#666;font-style:italic;font-size:11px;">No blacklisted names yet</div>
+          </div>
+
+          <!-- Clear All Button -->
+          <div style="margin-top:8px;text-align:center;">
+            <button id="clearBlacklistBtn" class="btn-secondary" style="font-size:10px;padding:4px 8px;background:#f44336;">🗑️ Clear All</button>
+          </div>
+        </div>
+      </div>
+
       <!-- AI Settings -->
       <div class="section collapsed" id="sectionAI">
         <div class="section-header" onclick="toggleSection('sectionAI')">
@@ -576,7 +651,15 @@
           </div>
         </div>
       </div>
-      
+
+      <!-- Save Settings Button for Chat Tab -->
+      <div style="margin-top:20px;padding-top:15px;border-top:2px solid #444;text-align:center;">
+        <button id="saveSettingsChatBtn" class="btn-start" style="width:auto;padding:10px 20px;font-size:14px;">
+          💾 Save Chat Settings (JSON)
+        </button>
+        <div class="help" style="margin-top:8px;">Exports all Chat tab settings to JSON file</div>
+      </div>
+
       <!-- Database / Logs -->
       <div class="section collapsed" id="sectionDatabase">
         <div class="section-header" onclick="toggleSection('sectionDatabase')">
@@ -631,9 +714,17 @@
           </div>
         </div>
       </div>
-      
+
+      <!-- Save Settings Button for Add Tab -->
+      <div style="margin-top:20px;padding-top:15px;border-top:2px solid #444;text-align:center;">
+        <button id="saveSettingsAddBtn" class="btn-start" style="width:auto;padding:10px 20px;font-size:14px;">
+          💾 Save Add Settings (JSON)
+        </button>
+        <div class="help" style="margin-top:8px;">Exports all Add tab settings to JSON file</div>
+      </div>
+
     </div>
-    
+
     <!-- ========== CHAT TAB ========== -->
     <div id="tabChat" class="tab-content">
       
@@ -681,7 +772,48 @@
           </div>
         </div>
       </div>
-      
+
+      <!-- Background Info -->
+      <div class="section collapsed" id="sectionBackground">
+        <div class="section-header" onclick="toggleSection('sectionBackground')">
+          <span class="section-title">📚 Background & Lifestyle</span>
+          <span class="section-toggle">▼</span>
+        </div>
+        <div class="section-content">
+          <div class="field">
+            <label>Occupation</label>
+            <input type="text" id="occupation" placeholder="Model, Student, Fitness trainer...">
+          </div>
+          <div class="field">
+            <label>Education</label>
+            <input type="text" id="education" placeholder="College graduate, High school...">
+          </div>
+          <div class="field">
+            <label>Relationship status</label>
+            <select id="relationshipStatus">
+              <option value="">Not specified</option>
+              <option value="single">Single</option>
+              <option value="dating">Dating</option>
+              <option value="committed">In a relationship</option>
+              <option value="married">Married</option>
+              <option value="complicated">It's complicated</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Personality traits</label>
+            <input type="text" id="personalityTraits" placeholder="Outgoing, adventurous, caring...">
+          </div>
+          <div class="field">
+            <label>Goals/Ambitions</label>
+            <textarea id="goals" placeholder="What are you working towards?" rows="2"></textarea>
+          </div>
+          <div class="field">
+            <label>Fun facts</label>
+            <textarea id="funFacts" placeholder="Interesting things about you..." rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
       <!-- Physical Details -->
       <div class="section collapsed" id="sectionPhysical">
         <div class="section-header" onclick="toggleSection('sectionPhysical')">
@@ -703,6 +835,20 @@
             <label>Body type</label>
             <input type="text" id="bodyType" placeholder="Curvy, Athletic, etc.">
           </div>
+          <div class="row">
+            <div class="field">
+              <label>Height</label>
+              <input type="text" id="height" placeholder="5'6", 168cm">
+            </div>
+            <div class="field">
+              <label>Measurements</label>
+              <input type="text" id="measurements" placeholder="34-26-36">
+            </div>
+          </div>
+          <div class="field">
+            <label>Ethnicity</label>
+            <input type="text" id="ethnicity" placeholder="Mixed, Caucasian, etc.">
+          </div>
           <div class="toggle-row">
             <label>Has tattoos</label>
             <label class="switch">
@@ -713,7 +859,11 @@
           <div id="tattooDetails" style="display:none;">
             <div class="field">
               <label>Tattoo description</label>
-              <textarea id="tattooDesc" placeholder="Describe your tattoos..."></textarea>
+              <textarea id="tattooDesc" placeholder="Describe your tattoos, meanings, and locations..." rows="3"></textarea>
+            </div>
+            <div class="field">
+              <label>Common tattoo questions</label>
+              <textarea id="tattooQuestions" placeholder="How many tattoos do you have? Do they have meaning? Which is your favorite?" rows="2"></textarea>
             </div>
           </div>
           <div class="toggle-row">
@@ -726,7 +876,11 @@
           <div id="piercingDetails" style="display:none;">
             <div class="field">
               <label>Piercing description</label>
-              <textarea id="piercingDesc" placeholder="Describe your piercings..."></textarea>
+              <textarea id="piercingDesc" placeholder="Describe your piercings and locations..." rows="3"></textarea>
+            </div>
+            <div class="field">
+              <label>Common piercing questions</label>
+              <textarea id="piercingQuestions" placeholder="How many piercings? Did they hurt? Which is your favorite?" rows="2"></textarea>
             </div>
           </div>
         </div>
@@ -763,6 +917,30 @@
           <div class="field">
             <label>Shows/Movies</label>
             <input type="text" id="showsMovies" placeholder="Breaking Bad, The Office...">
+          </div>
+          <div class="field">
+            <label>Favorite foods</label>
+            <input type="text" id="favoriteFoods" placeholder="Sushi, Italian, Mexican...">
+          </div>
+          <div class="field">
+            <label>Drinking habits</label>
+            <select id="drinkingHabits">
+              <option value="">Not specified</option>
+              <option value="never">Never drinks</option>
+              <option value="socially">Drinks socially</option>
+              <option value="occasionally">Drinks occasionally</option>
+              <option value="regularly">Drinks regularly</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Smoking habits</label>
+            <select id="smokingHabits">
+              <option value="">Not specified</option>
+              <option value="never">Never smokes</option>
+              <option value="socially">Smokes socially</option>
+              <option value="occasionally">Smokes occasionally</option>
+              <option value="regularly">Smokes regularly</option>
+            </select>
           </div>
         </div>
       </div>

@@ -66,10 +66,20 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   async function loadRunningState() {
     try {
       const data = await chrome.storage.local.get(['sf_running', 'sf_settings', 'sf_timestamp']);
-      // Only auto-resume if it was running within the last 5 minutes
-      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-      if (data.sf_running && data.sf_timestamp && data.sf_timestamp > fiveMinutesAgo && data.sf_settings) {
-        log('Auto-resuming from previous session...');
+
+      // Check if auto-resume is enabled in settings
+      const settingsData = await chrome.storage.sync.get('autoResume');
+      const autoResumeEnabled = settingsData.autoResume !== false; // Default to true for backward compatibility
+
+      if (!autoResumeEnabled) {
+        log('Auto-resume disabled by user setting');
+        return false;
+      }
+
+      // Only auto-resume if it was running within the last 30 seconds (much more conservative)
+      const thirtySecondsAgo = Date.now() - (30 * 1000);
+      if (data.sf_running && data.sf_timestamp && data.sf_timestamp > thirtySecondsAgo && data.sf_settings) {
+        log('Auto-resuming from recent interruption...');
         settings = data.sf_settings;
         isRunning = true;
         return true;
@@ -560,15 +570,21 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     try {
       const data = await chrome.storage.local.get('conversationTracking');
       const tracking = data.conversationTracking || {};
-      
+
       if (!tracking[userId]) {
         tracking[userId] = { userId: userId };
       }
-      
+
       tracking[userId].lastReplyAt = new Date().toISOString();
       tracking[userId].replied = true;
-      
+
       await chrome.storage.local.set({ conversationTracking: tracking });
+
+      // Also update conversation status for analytics
+      if (typeof window.updateConversationStatus === 'function') {
+        await window.updateConversationStatus(userId, 'replied').catch(e => console.error('[SF] DB status update error:', e));
+      }
+
       log('Tracked reply from: ' + userId);
     } catch (e) {
       log('Failed to track reply: ' + e);
@@ -658,7 +674,7 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
       const data = await chrome.storage.local.get('conversationTracking');
       const tracking = data.conversationTracking || {};
       const pending = [];
-      
+
       for (const userId in tracking) {
         const check = await shouldSendFollowUp(userId, followUpDelayHours, maxFollowUps, onlyIfNoReply);
         if (check.shouldSend) {
@@ -669,12 +685,353 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
           });
         }
       }
-      
+
       return pending;
     } catch (e) {
       log('Error getting pending follow-ups: ' + e);
       return [];
     }
+  }
+
+  // Find conversation by user ID
+  async function findConversationByUserId(userId) {
+    const conversations = findConversations();
+    for (const conv of conversations) {
+      // Open conversation to get user ID
+      const opened = await openConversation(conv);
+      if (!opened) continue;
+
+      const currentUserId = await getCurrentConversationUserId();
+      if (currentUserId === userId) {
+        return conv;
+      }
+    }
+    return null;
+  }
+
+  // Check if user has replied since our last message
+  async function checkForNewReply(userId) {
+    const data = await chrome.storage.local.get('conversationTracking');
+    const tracking = data.conversationTracking || {};
+    const userTrack = tracking[userId];
+
+    if (!userTrack || !userTrack.lastMessageAt) {
+      return false; // No messages sent yet
+    }
+
+    // Read conversation to check for replies after our last message
+    const conversationHistory = await getConversationContext();
+    if (!conversationHistory || !conversationHistory.messages) {
+      return false;
+    }
+
+    // Find messages after our last message
+    const lastMessageTime = new Date(userTrack.lastMessageAt);
+    const recentMessages = conversationHistory.messages.filter(msg => {
+      const msgTime = new Date(msg.timestamp || 0);
+      return msgTime > lastMessageTime && !msg.isFromMe;
+    });
+
+    return recentMessages.length > 0;
+  }
+
+  // Generate response to user reply
+  async function generateReplyResponse(userId, conversationHistory) {
+    // Handle special cases first
+    const lastMessage = conversationHistory.lastMessage || '';
+    const msg = lastMessage.toLowerCase();
+
+    // Check for OnlyFans requests
+    if (msg.includes('onlyfans') || msg.includes('only fans')) {
+      if (settings.sendCTAOnOnlyFansRequest) {
+        // Send CTA immediately
+        return await generateCTAResponse(userId, conversationHistory);
+      }
+    }
+
+    // Handle specific questions about persona details
+    const personaResponse = await generatePersonaResponse(lastMessage, conversationHistory);
+    if (personaResponse) {
+      return personaResponse;
+    }
+
+    // Use AI for responses if enabled
+    if (settings.aiChatEnabled && settings.apiKey) {
+      try {
+        return await generateAIChatResponse(lastMessage, conversationHistory.messages, settings);
+      } catch (e) {
+        log('AI response failed, using fallback');
+      }
+    }
+
+    // Handle objections
+    const objection = await checkForObjection(lastMessage);
+    if (objection) {
+      return await generateObjectionResponse(objection, userId, conversationHistory);
+    }
+
+    // Default response
+    return 'hey, thanks for replying! how are you?';
+  }
+
+  // Generate AI follow-up message
+  async function generateAIFollowUp(userId, conversationHistory) {
+    if (!settings.apiKey) return 'hey, how are you?';
+
+    try {
+      const prompt = buildFollowUpPrompt(conversationHistory);
+      const response = await callAnthropicAPI(prompt, settings.apiKey);
+
+      if (response && response.content) {
+        return response.content.trim();
+      }
+    } catch (e) {
+      log('AI follow-up error: ' + e);
+    }
+
+    return 'hey, how are you?';
+  }
+
+  // Build follow-up prompt for AI
+  function buildFollowUpPrompt(conversationHistory) {
+    const context = conversationHistory?.messages?.slice(-6) || []; // Last 6 messages
+    const conversationText = context.map(msg =>
+      msg.role === 'user' ? `Them: ${msg.content}` : `You: ${msg.content}`
+    ).join('\n');
+
+    return `You are a flirty, engaging chatbot for OnlyFans promotion. The user hasn't replied to your previous message for several hours. Send a short, engaging follow-up message (max 50 words) to re-engage them.
+
+Previous conversation:
+${conversationText}
+
+Send a follow-up message that shows you're still interested and reminds them of your offer. Be flirty but not pushy.`;
+  }
+
+  // Generate CTA response
+  async function generateCTAResponse(userId, conversationHistory) {
+    if (settings.ctaPlatform && settings.ctaInfo) {
+      return `yeah i got one! check out ${settings.ctaInfo}`;
+    }
+    return 'yeah i got one! message me there';
+  }
+
+  // Check for objections in user message
+  async function checkForObjection(message) {
+    const objections = {
+      noOF: ['no onlyfans', 'don\'t have onlyfans', 'no of', 'not interested in onlyfans'],
+      realConnection: ['want real connection', 'looking for relationship', 'not looking for that'],
+      socials: ['just add on socials', 'social media', 'instagram', 'snapchat only'],
+      subscribe: ['why subscribe', 'why pay', 'free'],
+      callMe: ['call me', 'phone number', 'text me'],
+      youreBot: ['are you a bot', 'bot', 'fake', 'real person'],
+      notReal: ['prove you\'re real', 'send pic', 'verification'],
+      letsHang: ['let\'s hang out', 'meet up', 'in person'],
+      meetUp: ['meet', 'hang out', 'coffee', 'dinner'],
+      notInterested: ['not interested', 'pass', 'no thanks'],
+      alreadyTalking: ['already talking to someone', 'seeing someone'],
+      whyPay: ['why should i pay', 'what\'s the point', 'benefits'],
+      sendSnap: ['send snap', 'snap me', 'snapchat'],
+      justPromote: ['just promoting', 'sales pitch', 'selling'],
+      whySafer: ['safer', 'why safer', 'anonymous']
+    };
+
+    const msg = message.toLowerCase();
+    for (const [key, phrases] of Object.entries(objections)) {
+      if (phrases.some(phrase => msg.includes(phrase))) {
+        return key;
+      }
+    }
+    return null;
+  }
+
+  // Generate objection response
+  async function generateObjectionResponse(objection, userId, conversationHistory) {
+    // Use AI for objection responses if enabled
+    if (settings.useAIObjections && settings.apiKey) {
+      try {
+        const prompt = buildObjectionPrompt(objection, conversationHistory);
+        const response = await callAnthropicAPI(prompt, settings.apiKey);
+        if (response && response.content) {
+          return response.content.trim();
+        }
+      } catch (e) {
+        log('AI objection response failed, using fallback');
+      }
+    }
+
+    // Fallback responses
+    const responses = {
+      noOF: 'i understand, but i have some exclusive content you might like 😉',
+      realConnection: 'i get that, but we can chat and see where things go',
+      socials: 'i\'m more active here, but we can exchange socials too',
+      subscribe: 'it\'s affordable and you get exclusive content and direct access to me',
+      callMe: 'i prefer chatting here for now, but we can exchange numbers later',
+      youreBot: 'lol i\'m 100% real, ask me anything personal!',
+      notReal: 'i can send you a quick selfie right now if you want 😊',
+      letsHang: 'i\'m open to meeting if we click, but let\'s chat first',
+      meetUp: 'definitely open to meeting! but let\'s get to know each other better first',
+      notInterested: 'no worries at all! have a great day 😊',
+      alreadyTalking: 'that\'s cool, i respect that. no pressure here',
+      whyPay: 'you get exclusive photos, videos, and direct access to chat with me anytime',
+      sendSnap: 'i just sent you a snap! check your notifications',
+      justPromote: 'i share my content but also love getting to know people like you',
+      whySafer: 'it keeps things private and secure for both of us'
+    };
+
+    return responses[objection] || 'i understand, but i\'d love to keep chatting if you\'re up for it 😊';
+  }
+
+  // Generate response for persona-related questions
+  async function generatePersonaResponse(message, conversationHistory) {
+    const msg = message.toLowerCase();
+
+    // Tattoo questions
+    if (msg.includes('tattoo')) {
+      if (settings.hasTattoos) {
+        if (msg.includes('how many') || msg.includes('how much') || msg.includes('how many tattoos')) {
+          return 'i have several tattoos! they all have special meanings to me. ' + (settings.tattooDesc ? settings.tattooDesc.substring(0, 100) : 'each one tells a story');
+        }
+        if (msg.includes('what') || msg.includes('mean') || msg.includes('about')) {
+          return settings.tattooDesc || 'my tattoos are really meaningful to me, they represent important moments and experiences in my life 💕';
+        }
+        if (msg.includes('where') || msg.includes('location') || msg.includes('body')) {
+          return settings.tattooDesc || 'i have tattoos in various places, they\'re all visible and beautiful 😊';
+        }
+        if (settings.tattooQuestions) {
+          return settings.tattooQuestions;
+        }
+        return 'yeah i have some tattoos! they\'re really beautiful and meaningful to me 💕';
+      } else {
+        // Default: no tattoos
+        return 'nah i don\'t have any tattoos, but i think they look really cool on other people! 💕';
+      }
+    }
+
+    // Piercing questions
+    if (msg.includes('piercing')) {
+      if (settings.hasPiercings) {
+        if (msg.includes('how many') || msg.includes('how much')) {
+          return 'i have a few piercings! ' + (settings.piercingDesc ? settings.piercingDesc.substring(0, 80) : 'they suit my style perfectly');
+        }
+        if (msg.includes('hurt') || msg.includes('pain')) {
+          return settings.piercingQuestions || 'they didn\'t hurt as much as i thought they would! totally worth it 😊';
+        }
+        if (settings.piercingQuestions) {
+          return settings.piercingQuestions;
+        }
+        return 'yeah i have some piercings! they add to my style 💎';
+      } else {
+        // Default: no piercings
+        return 'i don\'t have any piercings, but i think they can look really cute! 💎';
+      }
+    }
+
+    // Gaming questions
+    if (msg.includes('game') || msg.includes('gaming') || msg.includes('play')) {
+      if (settings.playsGames) {
+        if (msg.includes('what') || msg.includes('which')) {
+          return settings.gamesList || 'i play a variety of games! it\'s one of my favorite hobbies 🎮';
+        }
+        return 'yeah i love gaming! ' + (settings.gamesList ? settings.gamesList.substring(0, 100) : 'it\'s such a fun way to relax');
+      } else {
+        // Default: no gaming
+        return 'i don\'t really play video games, but i think it\'s cool that you do! what games are you into? 🎮';
+      }
+    }
+
+    // Music questions
+    if (msg.includes('music')) {
+      if (settings.musicTaste) {
+        return 'i love ' + settings.musicTaste + '! what kind of music are you into? 🎵';
+      } else {
+        return 'i love all kinds of music! pop, hip hop, and r&b are my favorites 🎵 what about you?';
+      }
+    }
+
+    // Food questions
+    if (msg.includes('food') || msg.includes('eat') || msg.includes('favorite food')) {
+      if (settings.favoriteFoods) {
+        return 'i absolutely love ' + settings.favoriteFoods + '! what about you? 🍕';
+      } else {
+        return 'i love trying new foods! sushi and italian are my go-tos 🍕 what\'s your favorite?';
+      }
+    }
+
+    // Hobby questions
+    if (msg.includes('hobby') || msg.includes('do for fun') || msg.includes('like to do')) {
+      if (settings.hobbies) {
+        return 'i enjoy ' + settings.hobbies + '! it keeps me busy and happy 😊';
+      } else {
+        return 'i love staying active and trying new things! gym, traveling, and photography are my main hobbies 😊';
+      }
+    }
+
+    // Height questions
+    if (msg.includes('tall') || msg.includes('height') || msg.includes('how tall')) {
+      if (settings.height) {
+        return 'i\'m ' + settings.height + '! perfect height for my style 😉';
+      } else {
+        return 'i\'m about average height! height isn\'t everything anyway 😊';
+      }
+    }
+
+    // Age questions
+    if (msg.includes('old') || msg.includes('age') || msg.includes('how old')) {
+      if (settings.personaAge) {
+        return 'i\'m ' + settings.personaAge + '! young enough to have fun, old enough to know better 😏';
+      } else {
+        return 'i\'m in my 20s! still figuring out life but having fun along the way 😊';
+      }
+    }
+
+    // Occupation questions
+    if (msg.includes('work') || msg.includes('job') || msg.includes('do for living')) {
+      if (settings.occupation) {
+        return 'i work as ' + settings.occupation + '! it keeps me busy but i love what i do 💼';
+      } else {
+        return 'i work in the creative field! it\'s rewarding but keeps me on my toes 💼';
+      }
+    }
+
+    // Education questions
+    if (msg.includes('school') || msg.includes('college') || msg.includes('education')) {
+      if (settings.education) {
+        return 'i\'m ' + settings.education + '! education is so important to me 📚';
+      } else {
+        return 'i value education and learning new things! 📚';
+      }
+    }
+
+    // Relationship questions
+    if (msg.includes('single') || msg.includes('dating') || msg.includes('relationship')) {
+      if (settings.relationshipStatus) {
+        const status = settings.relationshipStatus;
+        if (status === 'single') return 'i\'m single and enjoying life! looking for someone special 💕';
+        if (status === 'dating') return 'i\'m dating and seeing where things go! 💕';
+        if (status === 'committed') return 'i\'m in a relationship and very happy! 💕';
+        return 'my relationship status is ' + status + ' 💕';
+      } else {
+        return 'i\'m single and enjoying the freedom that comes with it! 💕';
+      }
+    }
+
+    // Return null if no persona response matches
+    return null;
+  }
+
+  // Build objection prompt for AI
+  function buildObjectionPrompt(objection, conversationHistory) {
+    const context = conversationHistory?.messages?.slice(-4) || [];
+    const conversationText = context.map(msg =>
+      msg.role === 'user' ? `Them: ${msg.content}` : `You: ${msg.content}`
+    ).join('\n');
+
+    return `You are responding to a user's objection in a flirty, engaging way. The objection is: "${objection}"
+
+Previous conversation:
+${conversationText}
+
+Respond naturally and keep the conversation going. Be flirty but not pushy. Address their concern while keeping things light and fun. Max 2-3 sentences.`;
   }
   
   // ============================================
@@ -1538,6 +1895,7 @@ Check for TWO things:
 - Trading/crypto spam (forex, trading, bitcoin) = SEXUAL
 - Suggestive nicknames (bigboy, baddie, freaky) = SEXUAL
 - Normal nicknames (gamer, sports refs, hobbies) = OK
+- Single common names like "sir", "max", "alex" should NOT be flagged as sexual unless combined with sexual terms
 
 Respond with EXACTLY one line in this format:
 ORIGIN:AMERICAN or ORIGIN:FOREIGN
@@ -1955,6 +2313,8 @@ SEXUAL:YES`;
     'asad', 'asif', 'atif',  // asad/asif/atif
     'faiz',  // faiz
     'haid', 'hayd',  // haider
+    // Serbian/Slavic roots
+    'rado', 'slavo', 'drago', 'brani', 'voj', 'milo', 'veli', 'zora', 'gora', 'velj', 'mira', 'slobo', 'bran', 'dark', 'deja', 'djord', 'ljubo', 'rado', 'sve', 'todor', 'zlat', 'zvon'
     'uzai',  // uzair
     
     // Sikh/Punjabi PREFIXES (very common patterns)
@@ -2022,6 +2382,8 @@ SEXUAL:YES`;
   const middleEasternNames = [
     // Middle Eastern / Arabic
     'ahmed','mohammed','muhammad','mohamed','mohammad','mohamad','muhamed','ali','hassan','hussain','hussein','omar','yusuf','yousef','ibrahim','abdullah','abdul','khalid','saad','tariq','zain','zayn','hamza','bilal','mustafa','osman','usman','ismail','salman','karim','jamal','rashid','faisal','nasser','mahmoud','majid','noor','reza','saeed','samir','waleed','yazan','zaid','adnan','amir','farid','hadi','hani','jamil','kareem','malik','nasir','qasim','sadiq','shahid','tahir','zahir','zaki','amin','arif','aziz','bashir','emad','fahad','ghazi','habib','imran','javed','jawad','khalil','latif','nabeel','nadeem','naveed','nazir','rafiq','rizwan','sabir','sajid','saleem','samad','shafiq','shahzad','shakir','sharif','taha','waqar','waqas','waseem','yasir','zafar','zahid','zubair','khan','sheikh','syed','iqbal','mirza','ramita','rukhsar','taufeeque','taufiq','tawfiq','toufiq','taufique','ashu',
+    // Serbian/Slavic names
+    'radoljub','radojka','radomir','radojko','radoslav','radovan','rado','slavko','slavoljub','slobodan','slobo','dragomir','dragoslav','dragoljub','branislav','branislava','branislavka','branko','branimir','brankica','vojislav','vojislava','vojka','milojko','milojka','milomir','milomira','milovan','milovana','veljko','veljka','velimir','velimira','velibor','velibora','zoran','zorana','zorica','zorka','goran','gorana','gorica','gordana','milan','milana','milanka','milica','milisav','milisava','miodrag','miodraga','milosav','milosava','milorad','milorada','milotin','milotina','miroslav','miroslava','miroslavka','nebojsa','nebojsa','nebojsica','nebojsa','nevenka','nevenko','novak','novakov','novakovski','petar','petrovic','petrov','petrović','marko','markovic','markov','marković','nikola','nikolic','nikol','nikolić','stefan','stefanovic','stefanov','stefanović','aleksandar','aleksandrovic','aleksandrov','aleksandarović','andrej','andreja','andrejko','andrejka','bojan','bojko','bojana','bojo','boja','bojanovic','bojanov','bojanović','darko','darka','darkica','darko','darkovic','darkov','darković','dejan','dejana','dejko','dejka','dejanovic','dejanov','dejanović','djordje','djordjev','djordjević','djordjev','djordjević','dragan','dragana','drago','draga','dragoljub','dragomir','dragoslav','dujan','dujana','dujko','dujka','dusko','duska','dusica','dusko','dusan','dusana','dusko','dusko','duskov','duskovic','goran','gorana','gordana','gordanka','gordan','gordana','gordanka','janko','janka','jankovic','jankov','janković','jovan','jovana','jovo','jova','jovanovic','jovanov','jovanović','lazar','lazarevic','lazarev','lazarević','ljubomir','ljubomira','ljubomiro','ljubomira','milan','milana','milanovic','milanov','milanović','milica','milivoje','milivojev','milivojević','milivojev','milivojević','milorad','milorada','miloradovic','miloradov','miloradović','milos','milosa','milosav','milosava','miloslav','miloslava','mirko','mirka','mirkovic','mirkov','mirković','nebojsa','nebojsa','nebojsica','nebojsa','nenad','nenada','nenadovic','nenadov','nenadović','novak','novakov','novakovski','petar','petrovic','petrov','petrović','radomir','radomira','radomiro','radomira','radosav','radosava','radoslav','radoslava','ranko','ranka','rankovic','rankov','ranković','slavko','slavka','slavomir','slavomira','slavoljub','slavomir','slavomira','slavoljub','slobodan','slobodana','slobo','sloboda','stanko','stanka','stankovic','stankov','stanković','stefan','stefana','stefanovic','stefanov','stefanović','svetlana','svetlan','svetlanovic','svetlanov','svetlanović','todor','todora','todorovic','todorov','todorović','velibor','velibora','veliborka','velimir','velimira','velimirka','veljko','veljka','veljkovic','veljkov','veljković','vladimir','vladimira','vladimiro','vladimira','vladislav','vladislava','vojislav','vojislava','vojko','vojka','vojkan','vojkanovic','vojkanov','vojkanović','zoran','zorana','zorica','zorka','zoranovic','zoranov','zoranović','zlatko','zlatka','zlatomir','zlatomira','zvonko','zvonkica','zvonkica','zvonko',
     // South Asian / Indian
     'preet','singh','raj','kumar','patel','gupta','sharma','ankit','rohit','vikram','suresh','dinesh','rakesh','daniyal','danyal','danya','ayan','aryan','ayaan','rehan','rohan','sohan','mohan','karan','arjun','varun','tarun','nikhil','rahul','sahil','vishal','kapil','sunil','anil','ravi','sanjay','vijay','ajay','manoj','deepak','ashok','vinod','pramod','naresh','ganesh','umesh','mukesh','lokesh','yogesh','jitesh','hitesh','ritesh','manish','danish','tanish','harish','girish','satish','nitish','pritesh','paresh','jayesh','brijesh','alpesh','chirag','nirav','maulik','ketan','chetan','hiren','jignesh','bhavesh','darshan','kishan','ishan','roshan','shan','farhan','burhan','imtiaz','mumtaz','nawaz','shabaz','faraz','niaz','liaqat','shaukat','barkat','rifat','aftab','mehtab','sohail','wajid','junaid','obaid','ubaid','humaid','saif','naif','hanif','sharif','siddiq','farooq','masood','mehmood','dawood','suleman','hafeez','azeez','muneeb','haseeb','munir','zaheer','sameer','tanveer','pervez','parveen','yasmeen','shireen','tasleem','hakeem','rahim','faheem','naeem','kaleem','haleem','akram','ikram','ashraf','musharaf','anwar','sarwar','dilwar','gulzar','sarfraz','shahbaz','riaz','ijaz','fayyaz','noman','othman','affan','irfan','kamran','adeel','aqeel','shakeel','jameel','sumeet','puneet','navneet',
     // Sikh/Punjabi names (comprehensive)
@@ -2056,7 +2418,7 @@ SEXUAL:YES`;
     'preet','simran','gurleen','harleen','navleen','manleen','jasleen','ramandeep','sukhdeep','lovedeep',
     'prem','krishan','gopal','mohan','sohan','kishan','ishan','roshan','darshan','lakhan','rehan','farhan',
     'shan','ali','omar','amir','zain','zayn','bilal','hamza','usman','imran','kamran','adeel','faisal',
-    'ashu','ash','taufeeque','taufiq','tawfiq'
+    'ashu','ash','taufeeque','taufiq','tawfiq','c.j','cj','cj','c.j.','cj.','chandu','chandra','jitendra','jitender','sanjay','sanjeev','rajeev','rajeev','vivek','viveka'
   ];
   
   // Sexual/inappropriate/spam terms to filter out
@@ -2603,7 +2965,23 @@ SEXUAL:YES`;
     let shouldIgnore = false;
     let reason = '';
     let needsAICheck = false;
-    
+
+    // 0. Check blacklist FIRST (highest priority)
+    try {
+      const blacklistData = await chrome.storage.local.get('nameBlacklist');
+      const blacklist = blacklistData.nameBlacklist || [];
+      const firstName = name.split(/\s+/)[0]?.toLowerCase();
+      const fullName = name.toLowerCase();
+
+      if (blacklist.includes(firstName) || blacklist.includes(fullName)) {
+        shouldIgnore = true;
+        reason = 'Blacklisted name';
+        console.log('  → Name in blacklist:', firstName || fullName);
+      }
+    } catch (e) {
+      console.log('  → Error checking blacklist:', e);
+    }
+
     // 1. Check brown emoji first
     if (settings.filterBrownEmoji && hasBrownEmoji(fullText)) {
       shouldIgnore = true;
@@ -2890,28 +3268,28 @@ SEXUAL:YES`;
     const waitHours = Math.floor(waitMins / 60);
     const remainingMins = waitMins % 60;
     
-    log('⏰ Stop time reached. Waiting until tomorrow (PST)...');
-    updateStatus('Stop time reached - wait ' + waitHours + 'h ' + remainingMins + 'm', 'running');
-    
-    // Save stop state
+    log('⏰ Stop time reached. Sleeping until tomorrow (PST)...');
+    updateStatus('Stop time reached - sleep ' + waitHours + 'h ' + remainingMins + 'm', 'running');
+
+    // Mark as sleeping but don't clear running state - we want to sleep, not stop
     await chrome.storage.local.set({
-      stoppedAtStopTime: true,
-      stopTimeReachedAt: Date.now()
+      sleepingAtStopTime: true,
+      stopTimeSleepStarted: Date.now()
     });
     
-    // Wait in chunks
+    // Wait in responsive chunks
     let remaining = waitMs;
-    const chunkSize = 60000; // 1 minute chunks
+    const chunkSize = 10000; // 10 second chunks for better responsiveness
     while (remaining > 0 && isRunning) {
       const chunk = Math.min(chunkSize, remaining);
       await delay(chunk);
       remaining -= chunk;
-      
-      // Check state periodically
-      const state = await chrome.storage.local.get(['sf_running']);
-      if (!state.sf_running) {
-        isRunning = false;
-        break;
+
+      // Allow manual stopping during sleep
+      if (!isRunning) {
+        await chrome.storage.local.remove(['sleepingAtStopTime', 'stopTimeSleepStarted']);
+        log('⏹️ Stopped during sleep');
+        return;
       }
       
       // Update status every minute
@@ -2919,55 +3297,47 @@ SEXUAL:YES`;
         const remainingMins = Math.ceil(remaining / 60000);
         const remainingHours = Math.floor(remainingMins / 60);
         const remainingMinsOnly = remainingMins % 60;
-        updateStatus('Stop time reached - wait ' + remainingHours + 'h ' + remainingMinsOnly + 'm', 'running');
-        await saveRunningState();
+        updateStatus('Sleeping until tomorrow - ' + remainingHours + 'h ' + remainingMinsOnly + 'm', 'running');
+        // Don't save running state during sleep to avoid auto-resume conflicts
       }
     }
     
     if (!isRunning) return;
-    
-    // Clear stop state
-    await chrome.storage.local.set({
-      stoppedAtStopTime: false,
-      stopTimeReachedAt: 0
-    });
-    
-    log('✅ New day started (PST) - resuming...');
-    updateStatus('New day - resuming...', 'running');
+
+    // Clear sleep state
+    await chrome.storage.local.remove(['sleepingAtStopTime', 'stopTimeSleepStarted']);
+
+    log('🌅 New day started (PST) - waking up and resuming...');
+    updateStatus('Waking up - resuming friend adding...', 'running');
+    await saveRunningState(); // Save state now that we're resuming
   }
   
   // Check if we should be stopped due to stop time (when app reopens)
   async function checkStopTimeOnResume() {
     try {
-      const data = await chrome.storage.local.get(['stoppedAtStopTime', 'stopTimeReachedAt']);
-      
-      if (data.stoppedAtStopTime && data.stopTimeReachedAt) {
+      const data = await chrome.storage.local.get(['sleepingAtStopTime', 'stopTimeSleepStarted']);
+
+      if (data.sleepingAtStopTime && data.stopTimeSleepStarted) {
         // Check if it's past the stop time now
         if (isPastStopTime()) {
           // Still past stop time - check if it's a new day
           const pstNow = getPSTTime();
-          const stopDate = new Date(data.stopTimeReachedAt);
-          const pstStopDate = getPSTTime();
-          pstStopDate.setTime(stopDate.getTime());
-          
+          const sleepDate = new Date(data.stopTimeSleepStarted);
+          const pstSleepDate = getPSTTime();
+          pstSleepDate.setTime(sleepDate.getTime());
+
           // If same day and still past stop time, wait
-          if (pstNow.toDateString() === pstStopDate.toDateString()) {
-            log('⏰ Still past stop time - waiting until tomorrow...');
-            return true; // Need to wait
+          if (pstNow.toDateString() === pstSleepDate.toDateString()) {
+            log('⏰ Still past stop time - sleeping until tomorrow...');
+            return true; // Need to sleep
           } else {
-            // New day, clear stop state
-            await chrome.storage.local.set({
-              stoppedAtStopTime: false,
-              stopTimeReachedAt: 0
-            });
-            return false; // Can resume
+            // New day, clear sleep state
+            await chrome.storage.local.remove(['sleepingAtStopTime', 'stopTimeSleepStarted']);
+            return false; // Can wake up
           }
         } else {
           // No longer past stop time (new day), clear state
-          await chrome.storage.local.set({
-            stoppedAtStopTime: false,
-            stopTimeReachedAt: 0
-          });
+          await chrome.storage.local.remove(['sleepingAtStopTime', 'stopTimeSleepStarted']);
           return false;
         }
       }
@@ -3122,20 +3492,20 @@ SEXUAL:YES`;
       const remaining = resumeTime.getTime() - pstNow.getTime();
       const remainingMins = Math.ceil(remaining / 60000);
       
-      // Wait in small chunks and check PST time
-      await delay(30000); // 30 second chunks
-      
-      // Check if we should stop
-      const state = await chrome.storage.local.get(['sf_running']);
-      if (!state.sf_running) {
-        isRunning = false;
-        break;
+      // Wait in small chunks and check PST time (more responsive)
+      await delay(5000); // 5 second chunks for better responsiveness
+
+      // Allow manual stopping during pause
+      if (!isRunning) {
+        await chrome.storage.local.remove(['pauseResumeTimePST', 'pauseStartedAt', 'pauseDurationMins']);
+        log('⏹️ Stopped during pause');
+        return;
       }
       
       // Update status
       const resumeTimeStr = formatTime(resumeTime.getHours() * 60 + resumeTime.getMinutes());
-      updateStatus('Pausing until ' + resumeTimeStr + ' PST (' + remainingMins + ' min left)', 'running');
-      await saveRunningState();
+      updateStatus('Sleeping until ' + resumeTimeStr + ' PST (' + remainingMins + ' min left)', 'running');
+      // Don't save running state during sleep
     }
   }
   
@@ -3180,14 +3550,14 @@ SEXUAL:YES`;
     const waitMins = Math.ceil(waitMs / 60000);
     const resetTimeStr = formatTime(nextHour.getHours() * 60);
     
-    log('⏳ Hourly friend add limit reached. Waiting until ' + resetTimeStr + ' PST (' + waitMins + ' min)...');
-    updateStatus('Hourly limit - wait until ' + resetTimeStr + ' PST', 'running');
-    
-    // Save hourly reset state
+    log('⏳ Hourly friend add limit reached. Sleeping until ' + resetTimeStr + ' PST (' + waitMins + ' min)...');
+    updateStatus('Hourly limit - sleep until ' + resetTimeStr + ' PST', 'running');
+
+    // Mark as sleeping but don't clear running state
     await chrome.storage.local.set({
+      sleepingForHourlyReset: true,
       hourlyResetTimePST: resetTimePST
     });
-    await saveRunningState();
     
     // Wait and check PST time
     while (isRunning) {
@@ -3205,35 +3575,36 @@ SEXUAL:YES`;
           hourlyResetTimePST: null
         });
         
-        log('✅ Hourly friend add limit reset (PST), resuming...');
-        updateStatus('Hourly limit reset, resuming...', 'running');
+        log('✅ Hourly friend add limit reset (PST), waking up...');
+        updateStatus('Hourly limit reset, waking up...', 'running');
+        await chrome.storage.local.remove(['sleepingForHourlyReset']);
+        await saveRunningState(); // Save state now that we're resuming
         return;
       }
       
-      // Wait in chunks and check PST time
-      await delay(60000); // 1 minute chunks
-      
-      // Check if we should stop
-      const state = await chrome.storage.local.get(['sf_running']);
-      if (!state.sf_running) {
-        isRunning = false;
+      // Wait in responsive chunks and check PST time
+      await delay(10000); // 10 second chunks for better responsiveness
+
+      // Allow manual stopping during sleep
+      if (!isRunning) {
+        await chrome.storage.local.remove(['sleepingForHourlyReset', 'hourlyResetTimePST']);
         break;
       }
       
       // Update status
       const remaining = resetTimePST - currentPST.getTime();
       const remainingMins = Math.ceil(remaining / 60000);
-      updateStatus('Hourly limit - wait until ' + resetTimeStr + ' PST (' + remainingMins + ' min)', 'running');
-      await saveRunningState();
+      updateStatus('Sleeping for hourly reset - ' + remainingMins + ' min', 'running');
+      // Don't save running state during sleep
     }
   }
   
   // Check hourly reset on resume
   async function checkHourlyResetOnResume() {
     try {
-      const data = await chrome.storage.local.get(['hourlyResetTimePST']);
-      
-      if (data.hourlyResetTimePST) {
+      const data = await chrome.storage.local.get(['sleepingForHourlyReset', 'hourlyResetTimePST']);
+
+      if (data.sleepingForHourlyReset && data.hourlyResetTimePST) {
         const pstNow = getPSTTime();
         const resetTime = new Date(data.hourlyResetTimePST);
         
@@ -3245,9 +3616,9 @@ SEXUAL:YES`;
           
           await chrome.storage.local.set({
             friendsAddedThisHour: 0,
-            lastFriendAddHourTimestamp: currentHourPST,
-            hourlyResetTimePST: null
+            lastFriendAddHourTimestamp: currentHourPST
           });
+          await chrome.storage.local.remove(['sleepingForHourlyReset', 'hourlyResetTimePST']);
           
           log('✅ Hourly reset completed (was waiting while app was closed)');
           return false; // Can continue
@@ -3606,104 +3977,227 @@ SEXUAL:YES`;
   // Main chat loop
   async function runChat() {
     if (!isRunning || !settings.chatEnabled) return;
-    
+
     log('Starting chat mode...');
     updateStatus('Chat mode started...', 'running');
-    
+
     let messagesSent = 0;
     let conversationsProcessed = 0;
-    
+    let followUpsSent = 0;
+    let repliesHandled = 0;
+
     while (isRunning) {
-      // Find conversations
-      const conversations = findConversations();
-      if (conversations.length === 0) {
-        log('No conversations found, waiting...');
-        await delay(5000);
-        continue;
-      }
-      
-      log('Found ' + conversations.length + ' conversations');
-      
-      // Process each conversation
-      for (const conv of conversations) {
-        if (!isRunning) break;
-        
+      // FIRST: Check for follow-ups that need to be sent
+      await processFollowUps();
+
+      // SECOND: Check for replies that need responses
+      await processReplies();
+
+      // THIRD: Send new messages to users who haven't been messaged yet
+      await sendNewMessages();
+
+      // Delay between full cycles (respect chat speed settings)
+      const chatSpeed = settings.chatSpeed || 'medium';
+      const delays = {
+        slow: { min: 60, max: 300 },
+        medium: { min: 30, max: 180 },
+        fast: { min: 10, max: 60 }
+      };
+      const speedDelays = delays[chatSpeed] || delays.medium;
+      const delaySec = randDelay(
+        (settings.chatMinDelay || speedDelays.min) * 1000,
+        (settings.chatMaxDelay || speedDelays.max) * 1000
+      );
+      log('Waiting ' + (delaySec / 1000) + ' seconds before next chat cycle...');
+      await delay(delaySec);
+    }
+  }
+
+  // Process follow-ups for users who haven't replied
+  async function processFollowUps() {
+    if (!settings.useAIFollowUps && !settings.followUpDelay) return;
+
+    log('Checking for follow-ups...');
+    const data = await chrome.storage.local.get('userTracking');
+    const userTracking = data.userTracking || {};
+
+    for (const [userId, tracking] of Object.entries(userTracking)) {
+      if (!isRunning) break;
+
+      // Check if we should send a follow-up
+      const followUpCheck = await shouldSendFollowUp(
+        userId,
+        settings.followUpDelay || 8,
+        settings.maxFollowUps || 20,
+        settings.followUpOnlyIfNoReply !== false
+      );
+
+      if (followUpCheck.shouldSend) {
+        log('Sending follow-up to: ' + userId);
+
         // Open conversation
-        const opened = await openConversation(conv);
-        if (!opened) {
-          log('Failed to open conversation: ' + conv.name);
+        const conversation = await findConversationByUserId(userId);
+        if (!conversation) {
+          log('Could not find conversation for follow-up: ' + userId);
           continue;
         }
-        
-        // Get conversation info
-        const userId = await getCurrentConversationUserId();
-        if (!userId) {
-          log('Could not get user ID for conversation');
-          continue;
-        }
-        
-        // Check if we should message this user
-        if (!await shouldMessageUser(userId)) {
-          log('Skipping user (already messaged): ' + userId);
-          conversationsProcessed++;
-          continue;
-        }
-        
-        // Read conversation history
-        const conversationHistory = await getConversationContext();
-        
-        // Determine what to send
-        const messagePlan = await determineMessageToSend(userId, conversationHistory);
-        log('Message plan: ' + messagePlan.type + ' (phase ' + messagePlan.phase + ')');
-        
-        // Generate message text
-        const messageText = await generateMessageText(userId, messagePlan.type, messagePlan.phase, conversationHistory);
-        
-        // Check if we should send photo (based on phase percentage)
-        const photoCheck = await shouldSendPhotoBasedOnPhase(userId, (conversationHistory?.messageCount || 0) / 2);
-        if (photoCheck.shouldSend) {
-          log('Sending photo: ' + photoCheck.reason);
-          const photoResult = await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
-          if (photoResult && photoResult.success && typeof window.logPhotoSent === 'function') {
-            await window.logPhotoSent(userId, photoResult.photoId || '', photoResult.category || 'main', photoResult.caption || '').catch(e => console.error('[SF] DB log error:', e));
+
+        const opened = await openConversation(conversation);
+        if (!opened) continue;
+
+        // Generate follow-up message
+        let followUpMessage = 'hey, how are you?';
+        if (settings.useAIFollowUps && settings.apiKey) {
+          try {
+            const context = await getConversationContext();
+            followUpMessage = await generateAIFollowUp(userId, context);
+          } catch (e) {
+            log('AI follow-up failed, using default');
           }
-          await delay(2000);
         }
-        
-        // Send message
-        const sent = await sendTextMessage(messageText);
+
+        // Send follow-up
+        const sent = await sendTextMessage(followUpMessage);
         if (sent) {
-          messagesSent++;
-          await trackMessageSent(userId, messageText);
-          await markUserAsMessaged(userId);
-          log('Message sent: ' + messageText.substring(0, 50));
-          
+          await trackFollowUpSent(userId);
+          followUpsSent++;
+          log('Follow-up sent: ' + followUpMessage.substring(0, 50));
+
           // Log to database
           if (typeof window.logMessage === 'function') {
-            await window.logMessage(userId, messagePlan.type, messageText, true).catch(e => console.error('[SF] DB log error:', e));
-          }
-          if (typeof window.logConversation === 'function') {
-            const conv = conversations.find(c => c.userId === userId);
-            await window.logConversation(userId, userId, conv?.name || '', 'messaged').catch(e => console.error('[SF] DB log error:', e));
+            await window.logMessage(userId, 'followup', followUpMessage, true).catch(e => console.error('[SF] DB log error:', e));
           }
         }
-        
-        // Delay before next conversation (respect chat speed settings)
-        const chatSpeed = settings.chatSpeed || 'medium';
-        const delays = {
-          slow: { min: 60, max: 300 },
-          medium: { min: 30, max: 180 },
-          fast: { min: 10, max: 60 }
-        };
-        const speedDelays = delays[chatSpeed] || delays.medium;
-        const delaySec = randDelay(
-          (settings.chatMinDelay || speedDelays.min) * 1000,
-          (settings.chatMaxDelay || speedDelays.max) * 1000
-        );
-        log('Waiting ' + (delaySec / 1000) + ' seconds before next conversation...');
-        await delay(delaySec);
-        
-        conversationsProcessed++;
+
+        // Small delay between follow-ups
+        await delay(2000);
+      }
+    }
+  }
+
+  // Process replies from users and respond appropriately
+  async function processReplies() {
+    log('Checking for replies...');
+
+    // Find conversations that might have replies
+    const conversations = findConversations();
+    for (const conv of conversations) {
+      if (!isRunning) break;
+
+      // Open conversation to check for replies
+      const opened = await openConversation(conv);
+      if (!opened) continue;
+
+      const userId = await getCurrentConversationUserId();
+      if (!userId) continue;
+
+      // Check if user replied since our last message
+      const hasNewReply = await checkForNewReply(userId);
+      if (hasNewReply) {
+        log('Found reply from: ' + userId);
+        repliesHandled++;
+
+        // Read conversation context
+        const conversationHistory = await getConversationContext();
+
+        // Track the reply
+        await trackReplyReceived(userId);
+
+        // Generate response based on conversation state
+        const responseText = await generateReplyResponse(userId, conversationHistory);
+
+        // Send response
+        const sent = await sendTextMessage(responseText);
+        if (sent) {
+          log('Reply sent: ' + responseText.substring(0, 50));
+
+          // Log to database
+          if (typeof window.logMessage === 'function') {
+            await window.logMessage(userId, 'reply', responseText, true).catch(e => console.error('[SF] DB log error:', e));
+          }
+        }
+
+        // Delay between replies
+        await delay(3000);
+      }
+    }
+  }
+
+  // Send new messages to users who haven't been messaged yet
+  async function sendNewMessages() {
+    log('Checking for new conversations to message...');
+
+    // Find conversations
+    const conversations = findConversations();
+    if (conversations.length === 0) {
+      return;
+    }
+
+    // Process each conversation
+    for (const conv of conversations) {
+      if (!isRunning) break;
+
+      // Open conversation
+      const opened = await openConversation(conv);
+      if (!opened) {
+        log('Failed to open conversation: ' + conv.name);
+        continue;
+      }
+
+      // Get conversation info
+      const userId = await getCurrentConversationUserId();
+      if (!userId) {
+        log('Could not get user ID for conversation');
+        continue;
+      }
+
+      // Check if we should message this user
+      if (!await shouldMessageUser(userId)) {
+        continue;
+      }
+
+      // Read conversation history
+      const conversationHistory = await getConversationContext();
+
+      // Determine what to send
+      const messagePlan = await determineMessageToSend(userId, conversationHistory);
+      log('Message plan for ' + userId + ': ' + messagePlan.type + ' (phase ' + messagePlan.phase + ')');
+
+      // Generate message text
+      const messageText = await generateMessageText(userId, messagePlan.type, messagePlan.phase, conversationHistory);
+
+      // Check if we should send photo (based on phase percentage)
+      const photoCheck = await shouldSendPhotoBasedOnPhase(userId, (conversationHistory?.messageCount || 0) / 2);
+      if (photoCheck.shouldSend) {
+        log('Sending photo: ' + photoCheck.reason);
+        const photoResult = await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
+        if (photoResult && photoResult.success && typeof window.logPhotoSent === 'function') {
+          await window.logPhotoSent(userId, photoResult.photoId || '', photoResult.category || 'main', photoResult.caption || '').catch(e => console.error('[SF] DB log error:', e));
+        }
+        await delay(2000);
+      }
+
+      // Send message
+      const sent = await sendTextMessage(messageText);
+      if (sent) {
+        messagesSent++;
+        await trackMessageSent(userId, messageText);
+        await markUserAsMessaged(userId);
+        log('Message sent to ' + userId + ': ' + messageText.substring(0, 50));
+
+        // Log to database
+        if (typeof window.logMessage === 'function') {
+          await window.logMessage(userId, messagePlan.type, messageText, true).catch(e => console.error('[SF] DB log error:', e));
+        }
+        if (typeof window.logConversation === 'function') {
+          await window.logConversation(userId, userId, conv?.name || '', 'messaged').catch(e => console.error('[SF] DB log error:', e));
+        }
+      }
+
+      // Delay before next conversation
+      await delay(2000);
+
+      conversationsProcessed++;
       }
       
       // Scroll to find more conversations
@@ -3789,11 +4283,13 @@ SEXUAL:YES`;
             continue; // Continue loop after hourly reset
           }
           
-          // Daily limit reached - stop completely
+          // Daily limit reached - pause/sleep until next day
           if (limitCheck.dailyLimit) {
-            log('Daily friend add limit reached - stopping');
-            updateStatus('Daily limit reached! Done for today.', 'stopped');
-            break;
+            log('Daily friend add limit reached - sleeping until next day...');
+            updateStatus('Daily limit reached - sleeping until tomorrow...', 'running');
+            await waitUntilNextDay();
+            if (!isRunning) break;
+            continue; // Continue after new day
           }
           
           // Other reason - stop
@@ -3844,14 +4340,16 @@ SEXUAL:YES`;
           log('Waiting ' + (delayBeforeAdd / 1000).toFixed(1) + ' seconds before clicking Add...' + 
               (settings.delayVariance ? ' (with ±' + (settings.varianceAmount || 30) + '% variance)' : ''));
           
-          // Break delay into chunks to allow stopping
+          // Break delay into smaller chunks to allow responsive stopping
           let delayRemaining = delayBeforeAdd;
-          const chunkSize = 10000; // 10 second chunks
+          const chunkSize = 2000; // 2 second chunks for better responsiveness
           while (delayRemaining > 0 && isRunning) {
             const chunk = Math.min(chunkSize, delayRemaining);
             await delay(chunk);
             delayRemaining -= chunk;
-            if (delayRemaining > 0 && isRunning) {
+            // Don't save running state during delays to prevent auto-resume issues
+            // Only save if we still have significant time remaining (>10 seconds)
+            if (delayRemaining > 10000 && isRunning) {
               await saveRunningState();
             }
           }
@@ -4191,11 +4689,12 @@ SEXUAL:YES`;
   }
 
   function updateStatus(msg, type = 'stopped') {
+    console.log('Content sending status update:', type, msg);
     chrome.runtime.sendMessage({
       action: 'statusUpdate',
       status: type,
       message: msg
-    }).catch(() => {});
+    }).catch((e) => console.log('Failed to send status update:', e));
   }
 
   // Message handler
@@ -4441,7 +4940,7 @@ SEXUAL:YES`;
       if (document.body) {
         setTimeout(createPanel, 2000);
         
-        // Check if we should auto-resume
+        // Check if we should auto-resume (only if enabled in settings)
         const wasRunning = await loadRunningState();
         if (wasRunning && settings) {
           log('Auto-resuming bot after page load...');
@@ -4456,6 +4955,8 @@ SEXUAL:YES`;
               });
             });
           }, 3000);
+        } else {
+          log('Auto-resume disabled or not needed');
         }
       } else {
         setTimeout(tryOpen, 200);
