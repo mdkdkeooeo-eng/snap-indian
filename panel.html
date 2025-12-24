@@ -577,6 +577,35 @@
         </div>
       </div>
       
+      <!-- Database / Logs -->
+      <div class="section collapsed" id="sectionDatabase">
+        <div class="section-header" onclick="toggleSection('sectionDatabase')">
+          <span class="section-title">💾 Database & Logs</span>
+          <span class="section-toggle">▼</span>
+        </div>
+        <div class="section-content">
+          <div class="help" style="margin-bottom:10px;">All bot activity is stored in SQL database (IndexedDB)</div>
+          
+          <div style="background:#2a2a2a;padding:10px;border-radius:6px;margin-bottom:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;margin-bottom:10px;">
+              <div>Friend requests accepted: <span id="dbAccepted">-</span></div>
+              <div>Friend requests declined: <span id="dbDeclined">-</span></div>
+              <div>Friends added: <span id="dbAdded">-</span></div>
+              <div>Conversations: <span id="dbConversations">-</span></div>
+              <div>Messages sent: <span id="dbMessages">-</span></div>
+              <div>Photos sent: <span id="dbPhotos">-</span></div>
+            </div>
+            <button id="refreshDbStatsBtn" class="btn-secondary btn-small">🔄 Refresh Stats</button>
+          </div>
+          
+          <button id="exportDbBtn" class="btn-secondary btn-small" style="margin-bottom:5px;">📥 Export Database (JSON)</button>
+          <button id="viewDbBtn" class="btn-secondary btn-small" style="margin-bottom:5px;">👁️ View Database</button>
+          <button id="clearDbBtn" class="btn-secondary btn-small" style="background:#f44336;">🗑️ Clear Database</button>
+          
+          <div id="dbViewer" style="display:none;margin-top:10px;background:#1a1a1a;padding:10px;border-radius:6px;max-height:300px;overflow-y:auto;font-size:11px;font-family:monospace;"></div>
+        </div>
+      </div>
+      
     </div>
     
     <!-- ========== CHAT TAB ========== -->

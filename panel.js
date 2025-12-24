@@ -1945,6 +1945,100 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// Database functions
+async function refreshDbStats() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) return;
+    
+    const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'getDbStats' });
+    if (response && response.stats) {
+      document.getElementById('dbAccepted').textContent = response.stats.accepted || 0;
+      document.getElementById('dbDeclined').textContent = response.stats.declined || 0;
+      document.getElementById('dbAdded').textContent = response.stats.added || 0;
+      document.getElementById('dbConversations').textContent = response.stats.conversations || 0;
+      document.getElementById('dbMessages').textContent = response.stats.messages || 0;
+      document.getElementById('dbPhotos').textContent = response.stats.photos || 0;
+    }
+  } catch (e) {
+    console.error('Error refreshing DB stats:', e);
+  }
+}
+
+async function exportDatabase() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) return;
+    
+    const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'exportDatabase' });
+    if (response && response.data) {
+      const jsonStr = JSON.stringify(response.data, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'snapchat_bot_database_' + new Date().toISOString().split('T')[0] + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      updateStatus('stopped', 'Database exported!');
+    }
+  } catch (e) {
+    console.error('Error exporting database:', e);
+    updateStatus('error', 'Export failed: ' + e.message);
+  }
+}
+
+async function viewDatabase() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) return;
+    
+    const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'exportDatabase' });
+    if (response && response.data) {
+      const viewer = document.getElementById('dbViewer');
+      if (viewer.style.display === 'none') {
+        let html = '<div style="margin-bottom:10px;"><strong>Database Contents:</strong></div>';
+        html += '<div><strong>Friend Requests:</strong> ' + (response.data.friendRequests?.length || 0) + '</div>';
+        html += '<div><strong>Friend Adds:</strong> ' + (response.data.friendAdds?.length || 0) + '</div>';
+        html += '<div><strong>Conversations:</strong> ' + (response.data.conversations?.length || 0) + '</div>';
+        html += '<div><strong>Messages:</strong> ' + (response.data.messages?.length || 0) + '</div>';
+        html += '<div><strong>Photos Sent:</strong> ' + (response.data.photos?.length || 0) + '</div>';
+        html += '<div style="margin-top:10px;color:#888;">Use Export to get full JSON data</div>';
+        viewer.innerHTML = html;
+        viewer.style.display = 'block';
+      } else {
+        viewer.style.display = 'none';
+      }
+    }
+  } catch (e) {
+    console.error('Error viewing database:', e);
+  }
+}
+
+async function clearDatabase() {
+  if (!confirm('Are you sure you want to clear all database logs? This cannot be undone!')) {
+    return;
+  }
+  
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) return;
+    
+    await chrome.tabs.sendMessage(tabs[0].id, { action: 'clearDatabase' });
+    await refreshDbStats();
+    updateStatus('stopped', 'Database cleared!');
+  } catch (e) {
+    console.error('Error clearing database:', e);
+    updateStatus('error', 'Clear failed: ' + e.message);
+  }
+}
+
+// Database button handlers
+document.getElementById('refreshDbStatsBtn')?.addEventListener('click', refreshDbStats);
+document.getElementById('exportDbBtn')?.addEventListener('click', exportDatabase);
+document.getElementById('viewDbBtn')?.addEventListener('click', viewDatabase);
+document.getElementById('clearDbBtn')?.addEventListener('click', clearDatabase);
+
 // Also listen for postMessage from parent (content script)
 window.addEventListener('message', (event) => {
   if (event.data && event.data.action === 'statusUpdate') {

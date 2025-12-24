@@ -22,6 +22,11 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   
   console.log('SF v' + SF_VERSION + ' loaded');
   
+  // Initialize database
+  if (typeof initDatabase === 'function') {
+    initDatabase().catch(e => console.error('[SF] Database init error:', e));
+  }
+  
   // Use non-obvious console prefix to avoid detection
   const log = (msg) => console.log('%c[SF]', 'color: #FFFC00; font-weight: bold', msg);
 
@@ -230,7 +235,7 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     return false;
   }
 
-  async function incrementAcceptCount(name) {
+  async function incrementAcceptCount(name, username = '') {
     acceptedThisSession++;
     acceptedThisHour++;
     acceptedToday++;
@@ -238,13 +243,23 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     await saveSessionStats();
     await saveLastActivity('Accepted: ' + (name || 'user').substring(0, 20));
     console.log('  Accepts - Session:', acceptedThisSession, 'Hour:', acceptedThisHour, 'Today:', acceptedToday);
+    
+    // Log to database
+    if (typeof logFriendRequest === 'function') {
+      await logFriendRequest(username, name, 'accepted', 'Passed all filters').catch(e => console.error('[SF] DB log error:', e));
+    }
   }
   
-  async function incrementDeclineCount(name, reason) {
+  async function incrementDeclineCount(name, reason, username = '') {
     declinedThisSession++;
     await saveSessionStats();
     await saveLastActivity('Declined: ' + (name || 'user').substring(0, 15) + ' (' + (reason || '') + ')');
     console.log('  Declined this session:', declinedThisSession);
+    
+    // Log to database
+    if (typeof logFriendRequest === 'function') {
+      await logFriendRequest(username, name, 'declined', reason || '').catch(e => console.error('[SF] DB log error:', e));
+    }
   }
   
   async function saveSessionStats() {
@@ -1318,7 +1333,14 @@ Style: ${style}, Flirt level: ${flirtLevel}/10`;
       await markPhotoSentToUser(userId, photo.id);
       
       log('Photo sent to user: ' + userId + ' (category: ' + category + ')');
-      return true;
+      
+      // Return photo data for logging
+      return {
+        success: true,
+        photoId: photo.id,
+        category: category,
+        caption: photo.description || ''
+      };
       
     } catch (e) {
       log('Error sending photo: ' + e);
@@ -2550,7 +2572,7 @@ SEXUAL:YES`;
         }
         
         if (declined) {
-          await incrementDeclineCount(name, reason);
+          await incrementDeclineCount(name, reason, username || '');
           await logUserAction(name, username, 'declined', reason);
           console.log('  ✓ DECLINED:', reason, '-', name, username ? '@' + username : '');
           return { action: 'declined', reason, name };
@@ -3170,7 +3192,17 @@ SEXUAL:YES`;
         const container = btn.closest('div[class*="entry"], div[class*="item"], div[class*="card"]') || 
                          btn.parentElement?.parentElement;
         if (container) {
-          addButtons.push({ button: btn, container: container });
+          // Try to extract name and username from the container
+          const nameElement = container.querySelector('[class*="name"], [class*="Name"], [aria-label*="name" i]');
+          const usernameElement = container.querySelector('[class*="username"], [class*="Username"]');
+          
+          addButtons.push({ 
+            button: btn, 
+            container: container,
+            name: nameElement?.textContent?.trim() || container.textContent?.split('\n')?.[0]?.trim() || '',
+            username: usernameElement?.textContent?.trim() || '',
+            displayName: container.textContent?.split('\n')?.[0]?.trim() || ''
+          });
         }
       }
     }
@@ -3440,7 +3472,10 @@ SEXUAL:YES`;
         const photoCheck = await shouldSendPhotoBasedOnPhase(userId, (conversationHistory?.messageCount || 0) / 2);
         if (photoCheck.shouldSend) {
           log('Sending photo: ' + photoCheck.reason);
-          await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
+          const photoResult = await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
+          if (photoResult && photoResult.success && typeof logPhotoSent === 'function') {
+            await logPhotoSent(userId, photoResult.photoId || '', photoResult.category || 'main', photoResult.caption || '').catch(e => console.error('[SF] DB log error:', e));
+          }
           await delay(2000);
         }
         
@@ -3451,6 +3486,15 @@ SEXUAL:YES`;
           await trackMessageSent(userId, messageText);
           await markUserAsMessaged(userId);
           log('Message sent: ' + messageText.substring(0, 50));
+          
+          // Log to database
+          if (typeof logMessage === 'function') {
+            await logMessage(userId, messagePlan.type, messageText, true).catch(e => console.error('[SF] DB log error:', e));
+          }
+          if (typeof logConversation === 'function') {
+            const conv = conversations.find(c => c.userId === userId);
+            await logConversation(userId, userId, conv?.name || '', 'messaged').catch(e => console.error('[SF] DB log error:', e));
+          }
         }
         
         // Delay before next conversation (respect chat speed settings)
@@ -3634,6 +3678,13 @@ SEXUAL:YES`;
           if (result.success) {
             added++;
             // Counters already saved by incrementFriendAddCount() in addFriend()
+            
+            // Log to database
+            if (typeof logFriendAdd === 'function') {
+              const username = addEntry.username || result.username || '';
+              const displayName = addEntry.name || addEntry.displayName || result.name || '';
+              await logFriendAdd(username, displayName).catch(e => console.error('[SF] DB log error:', e));
+            }
             
             // Check if we need to pause AFTER X adds
             // Note: This checks if we've reached the pause count (e.g., after 5 adds)
@@ -3962,6 +4013,53 @@ SEXUAL:YES`;
     
     if (msg.action === 'ping') {
       respond({ success: true, loaded: true });
+      return true;
+    }
+    
+    if (msg.action === 'getDbStats') {
+      if (typeof getStats === 'function') {
+        getStats().then(stats => {
+          respond({ success: true, stats });
+        }).catch(e => {
+          respond({ success: false, error: e.message });
+        });
+        return true;
+      }
+      respond({ success: false, error: 'Database not available' });
+      return true;
+    }
+    
+    if (msg.action === 'exportDatabase') {
+      if (typeof exportDatabase === 'function') {
+        exportDatabase().then(data => {
+          respond({ success: true, data });
+        }).catch(e => {
+          respond({ success: false, error: e.message });
+        });
+        return true;
+      }
+      respond({ success: false, error: 'Database not available' });
+      return true;
+    }
+    
+    if (msg.action === 'clearDatabase') {
+      if (typeof indexedDB !== 'undefined') {
+        try {
+          const deleteRequest = indexedDB.deleteDatabase('snapchat_bot_db');
+          deleteRequest.onsuccess = () => {
+            db = null;
+            dbInitialized = false;
+            respond({ success: true });
+          };
+          deleteRequest.onerror = () => {
+            respond({ success: false, error: 'Failed to delete database' });
+          };
+        } catch (e) {
+          respond({ success: false, error: e.message });
+        }
+        return true;
+      }
+      respond({ success: false, error: 'IndexedDB not available' });
       return true;
     }
     

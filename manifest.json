@@ -35,7 +35,7 @@
         "https://snapchat.com/*",
         "https://*.snapchat.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["database.js", "content.js"],
       "run_at": "document_idle",
       "all_frames": false
     }
