@@ -2033,11 +2033,13 @@ async function clearDatabase() {
   }
 }
 
-// Database button handlers
-document.getElementById('refreshDbStatsBtn')?.addEventListener('click', refreshDbStats);
-document.getElementById('exportDbBtn')?.addEventListener('click', exportDatabase);
-document.getElementById('viewDbBtn')?.addEventListener('click', viewDatabase);
-document.getElementById('clearDbBtn')?.addEventListener('click', clearDatabase);
+// Database button handlers (wait for DOM)
+setTimeout(() => {
+  document.getElementById('refreshDbStatsBtn')?.addEventListener('click', refreshDbStats);
+  document.getElementById('exportDbBtn')?.addEventListener('click', exportDatabase);
+  document.getElementById('viewDbBtn')?.addEventListener('click', viewDatabase);
+  document.getElementById('clearDbBtn')?.addEventListener('click', clearDatabase);
+}, 1000);
 
 // Also listen for postMessage from parent (content script)
 window.addEventListener('message', (event) => {

@@ -245,8 +245,8 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     console.log('  Accepts - Session:', acceptedThisSession, 'Hour:', acceptedThisHour, 'Today:', acceptedToday);
     
     // Log to database
-    if (typeof logFriendRequest === 'function') {
-      await logFriendRequest(username, name, 'accepted', 'Passed all filters').catch(e => console.error('[SF] DB log error:', e));
+    if (typeof window.logFriendRequest === 'function') {
+      await window.logFriendRequest(username, name, 'accepted', 'Passed all filters').catch(e => console.error('[SF] DB log error:', e));
     }
   }
   
@@ -256,10 +256,10 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
     await saveLastActivity('Declined: ' + (name || 'user').substring(0, 15) + ' (' + (reason || '') + ')');
     console.log('  Declined this session:', declinedThisSession);
     
-    // Log to database
-    if (typeof logFriendRequest === 'function') {
-      await logFriendRequest(username, name, 'declined', reason || '').catch(e => console.error('[SF] DB log error:', e));
-    }
+            // Log to database
+            if (typeof window.logFriendRequest === 'function') {
+              await window.logFriendRequest(username, name, 'declined', reason || '').catch(e => console.error('[SF] DB log error:', e));
+            }
   }
   
   async function saveSessionStats() {
@@ -2267,11 +2267,26 @@ SEXUAL:YES`;
     iframe.src = chrome.runtime.getURL('panel.html');
     iframe.style.cssText = 'width:100%;flex:1;border:none;background:#1a1a1a;';
     
+    // Add error handling for iframe load
+    iframe.onerror = (e) => {
+      console.error('[SF] Panel iframe error:', e);
+    };
+    
+    iframe.onload = () => {
+      console.log('[SF] Panel iframe loaded successfully');
+    };
+    
     panel.appendChild(header);
     panel.appendChild(iframe);
-    document.body.appendChild(panel);
-    console.log('✅ Panel created (centered, draggable)');
-    return true;
+    
+    try {
+      document.body.appendChild(panel);
+      console.log('✅ Panel created (centered, draggable)');
+      return true;
+    } catch (e) {
+      console.error('[SF] Error creating panel:', e);
+      return false;
+    }
   }
 
   function hidePanel() {
@@ -3473,8 +3488,8 @@ SEXUAL:YES`;
         if (photoCheck.shouldSend) {
           log('Sending photo: ' + photoCheck.reason);
           const photoResult = await sendPhotoToUser(userId, { ctaPhase: messagePlan.type === 'cta' });
-          if (photoResult && photoResult.success && typeof logPhotoSent === 'function') {
-            await logPhotoSent(userId, photoResult.photoId || '', photoResult.category || 'main', photoResult.caption || '').catch(e => console.error('[SF] DB log error:', e));
+          if (photoResult && photoResult.success && typeof window.logPhotoSent === 'function') {
+            await window.logPhotoSent(userId, photoResult.photoId || '', photoResult.category || 'main', photoResult.caption || '').catch(e => console.error('[SF] DB log error:', e));
           }
           await delay(2000);
         }
@@ -3488,12 +3503,12 @@ SEXUAL:YES`;
           log('Message sent: ' + messageText.substring(0, 50));
           
           // Log to database
-          if (typeof logMessage === 'function') {
-            await logMessage(userId, messagePlan.type, messageText, true).catch(e => console.error('[SF] DB log error:', e));
+          if (typeof window.logMessage === 'function') {
+            await window.logMessage(userId, messagePlan.type, messageText, true).catch(e => console.error('[SF] DB log error:', e));
           }
-          if (typeof logConversation === 'function') {
+          if (typeof window.logConversation === 'function') {
             const conv = conversations.find(c => c.userId === userId);
-            await logConversation(userId, userId, conv?.name || '', 'messaged').catch(e => console.error('[SF] DB log error:', e));
+            await window.logConversation(userId, userId, conv?.name || '', 'messaged').catch(e => console.error('[SF] DB log error:', e));
           }
         }
         
@@ -3680,10 +3695,10 @@ SEXUAL:YES`;
             // Counters already saved by incrementFriendAddCount() in addFriend()
             
             // Log to database
-            if (typeof logFriendAdd === 'function') {
+            if (typeof window.logFriendAdd === 'function') {
               const username = addEntry.username || result.username || '';
               const displayName = addEntry.name || addEntry.displayName || result.name || '';
-              await logFriendAdd(username, displayName).catch(e => console.error('[SF] DB log error:', e));
+              await window.logFriendAdd(username, displayName).catch(e => console.error('[SF] DB log error:', e));
             }
             
             // Check if we need to pause AFTER X adds
@@ -4017,8 +4032,8 @@ SEXUAL:YES`;
     }
     
     if (msg.action === 'getDbStats') {
-      if (typeof getStats === 'function') {
-        getStats().then(stats => {
+      if (typeof window.getStats === 'function') {
+        window.getStats().then(stats => {
           respond({ success: true, stats });
         }).catch(e => {
           respond({ success: false, error: e.message });
@@ -4030,8 +4045,8 @@ SEXUAL:YES`;
     }
     
     if (msg.action === 'exportDatabase') {
-      if (typeof exportDatabase === 'function') {
-        exportDatabase().then(data => {
+      if (typeof window.exportDatabase === 'function') {
+        window.exportDatabase().then(data => {
           respond({ success: true, data });
         }).catch(e => {
           respond({ success: false, error: e.message });
@@ -4047,8 +4062,7 @@ SEXUAL:YES`;
         try {
           const deleteRequest = indexedDB.deleteDatabase('snapchat_bot_db');
           deleteRequest.onsuccess = () => {
-            db = null;
-            dbInitialized = false;
+            if (window.db) window.db = null;
             respond({ success: true });
           };
           deleteRequest.onerror = () => {
@@ -4077,7 +4091,7 @@ SEXUAL:YES`;
       console.log('[SF] Starting with settings:', Object.keys(settings));
       isRunning = true;
       processed.clear();
-      await saveRunningState(); // Save state before starting
+      saveRunningState().then(() => {
       run().catch(err => {
         console.error('[SF] Error in run():', err);
         isRunning = false;
@@ -4117,7 +4131,15 @@ SEXUAL:YES`;
     }
     
     if (msg.action === 'openPanel') {
-      respond({ success: createPanel() });
+      try {
+        console.log('[SF] openPanel message received');
+        const result = createPanel();
+        console.log('[SF] createPanel returned:', result);
+        respond({ success: result });
+      } catch (e) {
+        console.error('[SF] Error in openPanel handler:', e);
+        respond({ success: false, error: e.message });
+      }
       return true;
     }
     

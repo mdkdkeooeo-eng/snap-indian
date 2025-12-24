@@ -20,16 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateStatus('stopped', 'Ready! Open panel to configure.');
     }
   } catch (e) {
-    // Try to inject
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        files: ['content.js']
-      });
-      updateStatus('stopped', 'Ready! Open panel to configure.');
-    } catch (e2) {
-      updateStatus('error', 'Please refresh Snapchat page');
-    }
+    // Try to inject (content script should auto-load, but if needed)
+    // Note: Content scripts are auto-injected via manifest, so this shouldn't be needed
+    updateStatus('error', 'Content script not loaded. Please refresh the Snapchat page.');
   }
 });
 
@@ -53,18 +46,8 @@ document.getElementById('openPanelBtn').addEventListener('click', async () => {
     await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
     updateStatus('stopped', 'Panel opened! Check Snapchat page.');
   } catch (e) {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        files: ['content.js']
-      });
-      setTimeout(async () => {
-        await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
-        updateStatus('stopped', 'Panel opened!');
-      }, 500);
-    } catch (e2) {
-      updateStatus('error', 'Please refresh Snapchat page');
-    }
+    updateStatus('error', 'Failed to open panel. Make sure you\'re on snapchat.com and refresh the page.');
+    console.error('Error opening panel:', e);
   }
 });
 

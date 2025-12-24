@@ -483,7 +483,20 @@ async function exportDatabase() {
   }
 }
 
-// Export database for external use
+// Export database functions globally for content.js access
+if (typeof window !== 'undefined') {
+  window.initDatabase = initDatabase;
+  window.logFriendRequest = logFriendRequest;
+  window.logFriendAdd = logFriendAdd;
+  window.logConversation = logConversation;
+  window.logMessage = logMessage;
+  window.logPhotoSent = logPhotoSent;
+  window.query = query;
+  window.getStats = getStats;
+  window.exportDatabase = exportDatabase;
+}
+
+// Also export for Node.js/CommonJS if needed
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     initDatabase,
