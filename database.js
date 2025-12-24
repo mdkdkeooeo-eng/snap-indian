@@ -1,12 +1,18 @@
 // SQL-like Database for logging - Uses IndexedDB
 // Stores all bot activity: accepted/declined friends, conversations, messages, etc.
 
-let db = null;
-const DB_NAME = 'snapchat_bot_db';
-const DB_VERSION = 1;
+// Prevent multiple initializations
+if (window.snapchatBotDBInitialized) {
+  console.log('[DB] Database already initialized, skipping...');
+} else {
+  window.snapchatBotDBInitialized = true;
 
-// Initialize IndexedDB
-async function initDatabase() {
+  let db = null;
+  const DB_NAME = 'snapchat_bot_db';
+  const DB_VERSION = 1;
+
+  // Initialize IndexedDB
+  async function initDatabase() {
   if (db) return db;
   
   return new Promise((resolve, reject) => {
@@ -510,4 +516,5 @@ async function exportDatabase() {
       exportDatabase
     };
   }
+}
 

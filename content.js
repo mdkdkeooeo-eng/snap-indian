@@ -2314,7 +2314,7 @@ SEXUAL:YES`;
     'faiz',  // faiz
     'haid', 'hayd',  // haider
     // Serbian/Slavic roots
-    'rado', 'slavo', 'drago', 'brani', 'voj', 'milo', 'veli', 'zora', 'gora', 'velj', 'mira', 'slobo', 'bran', 'dark', 'deja', 'djord', 'ljubo', 'rado', 'sve', 'todor', 'zlat', 'zvon'
+    'rado', 'slavo', 'drago', 'brani', 'voj', 'milo', 'veli', 'zora', 'gora', 'velj', 'mira', 'slobo', 'bran', 'dark', 'deja', 'djord', 'ljubo', 'rado', 'sve', 'todor', 'zlat', 'zvon',
     'uzai',  // uzair
     
     // Sikh/Punjabi PREFIXES (very common patterns)
