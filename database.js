@@ -510,5 +510,4 @@ async function exportDatabase() {
       exportDatabase
     };
   }
-}
 

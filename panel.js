@@ -19,9 +19,12 @@ window.switchTab = function(tabName) {
   }
   
   // Activate selected tab button
-  const tabButton = event.target;
-  if (tabButton) {
-    tabButton.classList.add('active');
+  if (tabName === 'add') {
+    document.getElementById('tabAddBtn')?.classList.add('active');
+    document.getElementById('tabChatBtn')?.classList.remove('active');
+  } else if (tabName === 'chat') {
+    document.getElementById('tabChatBtn')?.classList.add('active');
+    document.getElementById('tabAddBtn')?.classList.remove('active');
   }
 };
 
@@ -41,6 +44,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('exportDbBtn')?.addEventListener('click', exportDatabase);
   document.getElementById('viewDbBtn')?.addEventListener('click', viewDatabase);
   document.getElementById('clearDbBtn')?.addEventListener('click', clearDatabase);
+  
+  // Attach main control button handlers
+  document.getElementById('startBtn')?.addEventListener('click', handleStart);
+  document.getElementById('stopBtn')?.addEventListener('click', handleStop);
+  document.getElementById('findBtn')?.addEventListener('click', handleFindButtons);
+  
+  // Attach tab button handlers
+  document.getElementById('tabAddBtn')?.addEventListener('click', () => switchTab('add'));
+  document.getElementById('tabChatBtn')?.addEventListener('click', () => switchTab('chat'));
+  
+  // Attach section toggle handlers (replace onclick handlers)
+  document.querySelectorAll('.section-header').forEach(header => {
+    header.addEventListener('click', function() {
+      const section = this.closest('.section');
+      if (section) {
+        section.classList.toggle('collapsed');
+      }
+    });
+  });
   
   // Load all settings
   try {
@@ -1054,8 +1076,8 @@ function sendMessage(action, data = {}) {
   });
 }
 
-// Start button
-document.getElementById('startBtn').addEventListener('click', async () => {
+// Start button handler (attached in DOMContentLoaded)
+async function handleStart() {
   const settings = saveSettings();
   
   try {
@@ -1084,10 +1106,10 @@ document.getElementById('startBtn').addEventListener('click', async () => {
   } catch (e) {
     updateStatus('error', 'Error: ' + e.message);
   }
-});
+}
 
-// Stop button
-document.getElementById('stopBtn').addEventListener('click', async () => {
+// Stop button handler (will be attached in DOMContentLoaded)
+async function handleStop() {
   try {
     await sendMessage('stop');
   } catch (e) {}
@@ -1095,20 +1117,10 @@ document.getElementById('stopBtn').addEventListener('click', async () => {
   updateStatus('stopped', 'Stopped');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
-});
+}
 
-// Debug button
-document.getElementById('debugBtn').addEventListener('click', async () => {
-  try {
-    await sendMessage('debug');
-    updateStatus('stopped', 'Check console (F12)');
-  } catch (e) {
-    updateStatus('error', e.message);
-  }
-});
-
-// Find buttons
-document.getElementById('findBtn').addEventListener('click', async () => {
+// Find buttons handler (will be attached in DOMContentLoaded)
+async function handleFindButtons() {
   try {
     const response = await sendMessage('findAllButtons');
     if (response && response.log) {
@@ -1124,8 +1136,8 @@ document.getElementById('findBtn').addEventListener('click', async () => {
   }
 });
 
-// Reset limits
-document.getElementById('resetBtn').addEventListener('click', async () => {
+// Reset limits (using optional chaining in case element doesn't exist yet)
+document.getElementById('resetBtn')?.addEventListener('click', async () => {
   try {
     await sendMessage('resetLimits');
     await chrome.storage.local.set({ 
@@ -1150,14 +1162,14 @@ document.getElementById('resetBtn').addEventListener('click', async () => {
 });
 
 // Close button
-document.getElementById('closeBtn').addEventListener('click', async () => {
+document.getElementById('closeBtn')?.addEventListener('click', async () => {
   try {
     await sendMessage('closePanel');
   } catch (e) {}
 });
 
 // Export settings to JSON file
-document.getElementById('exportBtn').addEventListener('click', async () => {
+document.getElementById('exportBtn')?.addEventListener('click', async () => {
   try {
     const settings = await chrome.storage.sync.get();
     const stats = await chrome.storage.local.get();
@@ -1190,11 +1202,11 @@ document.getElementById('exportBtn').addEventListener('click', async () => {
 });
 
 // Import settings from JSON file
-document.getElementById('importBtn').addEventListener('click', () => {
-  document.getElementById('importFile').click();
+document.getElementById('importBtn')?.addEventListener('click', () => {
+  document.getElementById('importFile')?.click();
 });
 
-document.getElementById('importFile').addEventListener('change', async (e) => {
+document.getElementById('importFile')?.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   
@@ -1220,7 +1232,7 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
 });
 
 // View session logs
-document.getElementById('logsBtn').addEventListener('click', async () => {
+document.getElementById('logsBtn')?.addEventListener('click', async () => {
   try {
     const data = await chrome.storage.local.get('sessionLogs');
     const logs = data.sessionLogs || [];
@@ -1257,7 +1269,7 @@ document.getElementById('logsBtn').addEventListener('click', async () => {
 });
 
 // AI Chat Test
-document.getElementById('testChatBtn').addEventListener('click', async () => {
+document.getElementById('testChatBtn')?.addEventListener('click', async () => {
   const apiKey = getVal('apiKey').trim();
   const message = getVal('testMessage').trim();
   const responseDiv = document.getElementById('chatResponse');
@@ -1389,7 +1401,7 @@ ${s.allowExplicit !== false ? '- Adult/explicit content allowed - match their en
 }
 
 // Update from GitHub button
-document.getElementById('updateBtn').addEventListener('click', async () => {
+document.getElementById('updateBtn')?.addEventListener('click', async () => {
   const confirmed = confirm(
     '🔄 Update Extension from GitHub?\n\n' +
     'This will:\n' +
@@ -1435,7 +1447,7 @@ document.getElementById('updateBtn').addEventListener('click', async () => {
 });
 
 // User Log button
-document.getElementById('userLogBtn').addEventListener('click', async () => {
+document.getElementById('userLogBtn')?.addEventListener('click', async () => {
   try {
     const response = await sendMessage('getUserLog');
     if (response && response.log) {
@@ -1494,7 +1506,7 @@ document.getElementById('userLogBtn').addEventListener('click', async () => {
 });
 
 // Clear user log
-document.getElementById('clearLogBtn').addEventListener('click', async () => {
+document.getElementById('clearLogBtn')?.addEventListener('click', async () => {
   if (confirm('Clear all user history? This cannot be undone.')) {
     try {
       await sendMessage('clearUserLog');
@@ -1508,7 +1520,7 @@ document.getElementById('clearLogBtn').addEventListener('click', async () => {
 
 // Record Actions button
 let isRecording = false;
-document.getElementById('recordBtn').addEventListener('click', async () => {
+document.getElementById('recordBtn')?.addEventListener('click', async () => {
   if (!isRecording) {
     try {
       const response = await sendMessage('startRecording');
