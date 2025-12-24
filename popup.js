@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   const url = tabs[0].url || '';
   if (!url.includes('snapchat.com')) {
-    updateStatus('stopped', 'Go to snapchat.com first');
+    updateStatus('stopped', 'Go to web.snapchat.com first');
     return;
   }
   
@@ -37,8 +37,9 @@ document.getElementById('openPanelBtn').addEventListener('click', async () => {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tabs[0]) return;
   
-  if (!tabs[0].url.includes('snapchat.com')) {
-    updateStatus('error', 'Go to snapchat.com first');
+  const url = tabs[0].url || '';
+  if (!url.includes('snapchat.com')) {
+    updateStatus('error', 'Go to web.snapchat.com first');
     return;
   }
   
@@ -46,7 +47,7 @@ document.getElementById('openPanelBtn').addEventListener('click', async () => {
     await chrome.tabs.sendMessage(tabs[0].id, { action: 'openPanel' });
     updateStatus('stopped', 'Panel opened! Check Snapchat page.');
   } catch (e) {
-    updateStatus('error', 'Failed to open panel. Make sure you\'re on snapchat.com and refresh the page.');
+    updateStatus('error', 'Failed to open panel. Make sure you\'re on web.snapchat.com and refresh the page.');
     console.error('Error opening panel:', e);
   }
 });
