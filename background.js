@@ -35,4 +35,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Popup might not be open, ignore
     });
   }
+
+  // Forward log messages to panel
+  if (message.action === 'logToPanel') {
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Panel might not be open, ignore
+    });
+  }
 });

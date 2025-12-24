@@ -28,7 +28,20 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
   }
   
   // Use non-obvious console prefix to avoid detection
-  const log = (msg) => console.log('%c[SF]', 'color: #FFFC00; font-weight: bold', msg);
+  const log = (msg) => {
+    console.log('%c[SF]', 'color: #FFFC00; font-weight: bold', msg);
+
+    // Also send to panel activity log
+    try {
+      chrome.runtime.sendMessage({
+        action: 'logToPanel',
+        type: 'info',
+        message: msg
+      });
+    } catch (e) {
+      // Ignore errors sending to panel
+    }
+  };
 
   // State
   let isRunning = false;
@@ -1813,6 +1826,99 @@ SEXUAL:YES`;
     return { log, count };
   }
 
+  async function playbackRecording() {
+    if (recordedActions.length === 0) {
+      log('No recorded actions to playback');
+      return;
+    }
+
+    log('▶️ Starting playback of ' + recordedActions.length + ' recorded actions...');
+
+    for (let i = 0; i < recordedActions.length; i++) {
+      const action = recordedActions[i];
+
+      try {
+        if (action.type === 'click') {
+          // For click actions, find the element and click it
+          const element = findElementByRecordedAction(action);
+          if (element) {
+            log('Clicking element: ' + element.tagName + '.' + element.className);
+            await click(element);
+            await delay(500); // Small delay between actions
+          } else {
+            log('Could not find element for click action ' + (i + 1));
+          }
+        } else if (action.type === 'hover') {
+          // For hover actions, move mouse over the element
+          const element = findElementByRecordedAction(action);
+          if (element) {
+            const rect = element.getBoundingClientRect();
+            const event = new MouseEvent('mousemove', {
+              clientX: rect.left + rect.width / 2,
+              clientY: rect.top + rect.height / 2,
+              bubbles: true
+            });
+            element.dispatchEvent(event);
+            await delay(200);
+          }
+        }
+        // Skip 'revealed' actions during playback
+      } catch (e) {
+        log('Error during playback action ' + (i + 1) + ': ' + e);
+      }
+    }
+
+    log('✅ Playback completed');
+  }
+
+  function findElementByRecordedAction(action) {
+    const el = action.element;
+
+    // Try to find by ID first
+    if (el.id) {
+      const element = document.getElementById(el.id);
+      if (element) return element;
+    }
+
+    // Try to find by text content
+    if (el.text && el.text.trim()) {
+      const elements = Array.from(document.querySelectorAll('*')).filter(e =>
+        e.textContent && e.textContent.trim() === el.text.trim()
+      );
+      if (elements.length > 0) return elements[0];
+    }
+
+    // Try to find by class and tag
+    if (el.className) {
+      const selector = el.tagName + (el.className ? '.' + el.className.split(' ')[0] : '');
+      const elements = document.querySelectorAll(selector);
+      // Find the one closest to the recorded position
+      let bestMatch = null;
+      let bestDistance = Infinity;
+
+      elements.forEach(element => {
+        const rect = element.getBoundingClientRect();
+        const distance = Math.abs(rect.left - el.x) + Math.abs(rect.top - el.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestMatch = element;
+        }
+      });
+
+      if (bestMatch) return bestMatch;
+    }
+
+    // Fallback: try to find by position (less reliable)
+    const elements = document.elementsFromPoint(el.x + el.width / 2, el.y + el.height / 2);
+    for (const element of elements) {
+      if (element.tagName === el.tagName) {
+        return element;
+      }
+    }
+
+    return null;
+  }
+
   // Middle Eastern name ROOTS/PREFIXES for fuzzy matching
   // These catch variations like mohamad, mohmad, muhamed, mohmandolo, etc.
   const nameRoots = [
@@ -3183,45 +3289,115 @@ SEXUAL:YES`;
   // Find "Add" buttons in Quick Add section
   function findAddButtons() {
     const addButtons = [];
-    
-    // Look for buttons with "Add" text or aria-label
-    const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'))
-      .filter(btn => btn.offsetParent !== null); // Only visible buttons
-    
-    for (const btn of allButtons) {
-      const text = (btn.textContent || '').trim().toLowerCase();
-      const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-      const title = (btn.getAttribute('title') || '').toLowerCase();
-      
-      // Check if it's an Add button (not Accept, not X/Close, not Send, etc.)
-      if ((text === 'add' || ariaLabel.includes('add') || title.includes('add')) &&
-          !text.includes('accept') && 
-          !text.includes('decline') &&
-          !text.includes('ignore') &&
-          !text.includes('send') &&
-          !text.includes('close') &&
-          !ariaLabel.includes('accept') &&
-          !ariaLabel.includes('decline')) {
-        
-        // Make sure it's in a friend entry (has name/username nearby)
-        const container = btn.closest('div[class*="entry"], div[class*="item"], div[class*="card"]') || 
-                         btn.parentElement?.parentElement;
-        if (container) {
-          // Try to extract name and username from the container
-          const nameElement = container.querySelector('[class*="name"], [class*="Name"], [aria-label*="name" i]');
-          const usernameElement = container.querySelector('[class*="username"], [class*="Username"]');
-          
-          addButtons.push({ 
-            button: btn, 
-            container: container,
-            name: nameElement?.textContent?.trim() || container.textContent?.split('\n')?.[0]?.trim() || '',
-            username: usernameElement?.textContent?.trim() || '',
-            displayName: container.textContent?.split('\n')?.[0]?.trim() || ''
-          });
+
+    log('🔍 Looking for Add buttons...');
+
+    // Look for Add buttons using multiple selector strategies
+    // Strategy 1: Look for buttons with specific classes and text
+    const selectors = [
+      'button[class*="add"]',
+      'button[class*="Add"]',
+      '[role="button"][class*="add"]',
+      '[role="button"][class*="Add"]',
+      'button[aria-label*="add" i]',
+      'button[aria-label*="Add" i]',
+      'button[data-testid*="add"]',
+      'button[data-testid*="Add"]'
+    ];
+
+    for (const selector of selectors) {
+      const buttons = Array.from(document.querySelectorAll(selector))
+        .filter(btn => btn.offsetParent !== null); // Only visible
+
+      log(`  Checking selector "${selector}": found ${buttons.length} buttons`);
+
+      for (const btn of buttons) {
+        const text = (btn.textContent || '').trim().toLowerCase();
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+        // Must contain "add" and not be accept/decline/send buttons
+        if ((text.includes('add') || ariaLabel.includes('add')) &&
+            !text.includes('accept') &&
+            !text.includes('decline') &&
+            !text.includes('ignore') &&
+            !text.includes('send') &&
+            !text.includes('close')) {
+
+          log(`  ✓ Found potential Add button: "${text}" aria="${ariaLabel}"`);
+
+          // Find container (friend entry)
+          const container = btn.closest('div[class*="entry"], div[class*="item"], div[class*="card"], div[class*="friend"]') ||
+                           btn.parentElement?.parentElement?.parentElement;
+
+          if (container) {
+            // Extract name/username
+            const nameElement = container.querySelector('[class*="name"], [class*="Name"], [aria-label*="name" i]');
+            const usernameElement = container.querySelector('[class*="username"], [class*="Username"], [class*="handle"]');
+
+            const name = nameElement?.textContent?.trim() || container.textContent?.split('\n')?.[0]?.trim() || '';
+            const username = usernameElement?.textContent?.trim() || '';
+
+            log(`    → Name: "${name}" Username: "${username}"`);
+
+            addButtons.push({
+              button: btn,
+              container: container,
+              name: name,
+              username: username,
+              displayName: container.textContent?.split('\n')?.[0]?.trim() || ''
+            });
+          } else {
+            log(`    ✗ No container found for button`);
+          }
         }
       }
     }
-    
+
+    // Strategy 2: Look for any button with "Add" text as fallback
+    if (addButtons.length === 0) {
+      log('  No buttons found with strategy 1, trying fallback...');
+      const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'))
+        .filter(btn => btn.offsetParent !== null);
+
+      log(`  Checking ${allButtons.length} total buttons for exact "add" text...`);
+
+      for (const btn of allButtons) {
+        const text = (btn.textContent || '').trim().toLowerCase();
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+        if ((text === 'add' || text === 'add friend' || ariaLabel === 'add' || ariaLabel === 'add friend') &&
+            !text.includes('accept') &&
+            !text.includes('decline') &&
+            !text.includes('ignore') &&
+            !text.includes('send')) {
+
+          log(`  ✓ Found Add button (fallback): "${text}" aria="${ariaLabel}"`);
+
+          const container = btn.closest('div[class*="entry"], div[class*="item"], div[class*="card"]') ||
+                           btn.parentElement?.parentElement;
+
+          if (container) {
+            const nameElement = container.querySelector('[class*="name"], [class*="Name"]');
+            const usernameElement = container.querySelector('[class*="username"], [class*="Username"]');
+
+            const name = nameElement?.textContent?.trim() || container.textContent?.split('\n')?.[0]?.trim() || '';
+            const username = usernameElement?.textContent?.trim() || '';
+
+            log(`    → Name: "${name}" Username: "${username}"`);
+
+            addButtons.push({
+              button: btn,
+              container: container,
+              name: name,
+              username: username,
+              displayName: container.textContent?.split('\n')?.[0]?.trim() || ''
+            });
+          }
+        }
+      }
+    }
+
+    log(`✅ Found ${addButtons.length} Add buttons total`);
     return addButtons;
   }
   
@@ -4182,6 +4358,12 @@ SEXUAL:YES`;
     if (msg.action === 'stopRecording') {
       const result = stopRecording();
       respond({ success: true, log: result.log, count: result.count });
+      return true;
+    }
+
+    if (msg.action === 'playbackRecording') {
+      playbackRecording();
+      respond({ success: true });
       return true;
     }
     

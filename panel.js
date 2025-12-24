@@ -58,13 +58,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   });
+
+  // Attach activity log handlers
+  document.getElementById('clearLogBtn')?.addEventListener('click', () => {
+    const logEl = document.getElementById('activityLog');
+    if (logEl) {
+      logEl.innerHTML = '<div style="color:#888;font-style:italic;">Bot activity will appear here...</div>';
+    }
+  });
+
+  // Attach recording handlers
+  document.getElementById('playbackBtn')?.addEventListener('click', async () => {
+    try {
+      const response = await sendMessage('playbackRecording');
+      if (response && response.success) {
+        updateStatus('running', 'Playing back recorded actions...');
+      } else {
+        updateStatus('error', response?.error || 'Playback failed');
+      }
+    } catch (e) {
+      updateStatus('error', e.message);
+    }
+  });
   
   // Attach mode switch handlers
   document.getElementById('friendsAddEnabled')?.addEventListener('change', function() {
     updateModeSwitchVisuals();
+    // Also save settings when toggled
+    saveSettings();
   });
   document.getElementById('chatEnabled')?.addEventListener('change', function() {
     updateModeSwitchVisuals();
+    // Also save settings when toggled
+    saveSettings();
   });
   
   // Load all settings
@@ -1064,6 +1090,42 @@ function updateStatus(type, msg) {
   el.className = 'status ' + type;
   el.textContent = msg;
   }
+
+  // Also add to activity log
+  addToActivityLog(type, msg);
+}
+
+// Add message to activity log
+function addToActivityLog(type, msg) {
+  const logEl = document.getElementById('activityLog');
+  if (!logEl) return;
+
+  const timestamp = new Date().toLocaleTimeString([], {hour12: false});
+  const typeEmoji = {
+    'running': '▶️',
+    'stopped': '⏹️',
+    'error': '❌',
+    'success': '✅',
+    'warning': '⚠️'
+  }[type] || 'ℹ️';
+
+  const logEntry = document.createElement('div');
+  logEntry.style.cssText = 'margin-bottom:2px;padding:1px 0;border-bottom:1px solid #333;';
+  logEntry.innerHTML = `<span style="color:#888;font-size:9px;">${timestamp}</span> ${typeEmoji} <span style="color:#fff;">${msg}</span>`;
+
+  // Remove the placeholder text if it exists
+  const placeholder = logEl.querySelector('[style*="font-style:italic"]');
+  if (placeholder) placeholder.remove();
+
+  logEl.appendChild(logEntry);
+
+  // Auto-scroll to bottom
+  logEl.scrollTop = logEl.scrollHeight;
+
+  // Keep only last 100 entries
+  while (logEl.children.length > 100) {
+    logEl.removeChild(logEl.firstChild);
+  }
 }
 
 // Send message to content script via background
@@ -1078,6 +1140,13 @@ function sendMessage(action, data = {}) {
     });
   });
 }
+
+// Listen for log messages from content script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'logToPanel') {
+    addToActivityLog(message.type || 'info', message.message);
+  }
+});
 
 // Start button - attach directly like working version
 document.getElementById('startBtn')?.addEventListener('click', async () => {
@@ -1523,7 +1592,12 @@ document.getElementById('clearLogBtn')?.addEventListener('click', async () => {
 
 // Record Actions button
 let isRecording = false;
+let currentRecordingLog = '';
+
 document.getElementById('recordBtn')?.addEventListener('click', async () => {
+  const statusEl = document.getElementById('recordingStatus');
+  const logEl = document.getElementById('recordingLog');
+
   if (!isRecording) {
     try {
       const response = await sendMessage('startRecording');
@@ -1531,7 +1605,10 @@ document.getElementById('recordBtn')?.addEventListener('click', async () => {
         isRecording = true;
         document.getElementById('recordBtn').textContent = '⏹ Stop Recording';
         document.getElementById('recordBtn').style.background = '#f44336';
-        updateStatus('running', 'Recording clicks... Click elements, then stop to copy log.');
+        if (statusEl) statusEl.innerHTML = '🔴 <strong>RECORDING</strong> - Move mouse and click elements';
+        if (logEl) logEl.style.display = 'block';
+        updateStatus('running', 'Recording mouse movements and clicks...');
+        currentRecordingLog = '';
       }
     } catch (e) {
       updateStatus('error', e.message);
@@ -1540,17 +1617,23 @@ document.getElementById('recordBtn')?.addEventListener('click', async () => {
     try {
       const response = await sendMessage('stopRecording');
       isRecording = false;
-      document.getElementById('recordBtn').textContent = '🔴 Record Actions';
-      document.getElementById('recordBtn').style.background = '#673AB7';
-      
+      document.getElementById('recordBtn').textContent = '🎥 Record';
+      document.getElementById('recordBtn').style.background = '';
+      if (statusEl) statusEl.innerHTML = 'Ready to record mouse movements and clicks';
+
       if (response && response.log) {
+        currentRecordingLog = response.log;
+        if (logEl) {
+          logEl.innerHTML = '<pre style="margin:0;font-size:9px;">' + response.log.replace(/\n/g, '<br>') + '</pre>';
+        }
         try {
           const copied = await copyToClipboard(response.log);
-          updateStatus('stopped', copied ? 'Recorded ' + response.count + ' actions - copied to clipboard!' : 'Recorded ' + response.count + ' actions - check console (F12)');
+          updateStatus('success', copied ? 'Recorded ' + response.count + ' actions - copied to clipboard!' : 'Recorded ' + response.count + ' actions - view log below');
         } catch (e) {
-          updateStatus('stopped', 'Recorded ' + response.count + ' actions - check console (F12)');
+          updateStatus('stopped', 'Recorded ' + response.count + ' actions - view log below');
         }
       } else {
+        if (statusEl) statusEl.innerHTML = '❌ No actions recorded';
         updateStatus('stopped', 'No actions recorded');
       }
     } catch (e) {
