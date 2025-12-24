@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       maxHourly: 20,
       minSession: 5,
       maxSession: 30,
-      sessionBreakMins: 30,
+      sessionBreakMins: 0, // 0 = no break, any number = minutes to wait between sessions
       
       // Filters
       filterNonAmerican: true,
@@ -799,7 +799,7 @@ function saveSettings() {
     maxHourly: getInt('maxHourly', 20),
     minSession: getInt('minSession', 5),
     maxSession: getInt('maxSession', 30),
-    sessionBreakMins: getInt('sessionBreakMins', 30),
+      sessionBreakMins: getInt('sessionBreakMins', 0), // Default to 0 (no break)
     
     // Filters
     filterNonAmerican: getChecked('filterNonAmerican'),

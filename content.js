@@ -2763,7 +2763,9 @@ SEXUAL:YES`;
       console.log('Continuing from - Session:', acceptedThisSession, 'Hour:', acceptedThisHour, 'Today:', acceptedToday);
     } catch (e) {}
     
-    if (settings.sessionBreakMins > 0 && lastSessionEnd > 0) {
+    // Session break - only if sessionBreakMins is set to a value > 0
+    // If set to 0, no break is required
+    if (settings.sessionBreakMins && settings.sessionBreakMins > 0 && lastSessionEnd > 0) {
       const minsSinceLastSession = (Date.now() - lastSessionEnd) / (60 * 1000);
       if (minsSinceLastSession < settings.sessionBreakMins) {
         const waitMins = Math.ceil(settings.sessionBreakMins - minsSinceLastSession);
@@ -2772,6 +2774,11 @@ SEXUAL:YES`;
         isRunning = false;
         return;
       }
+    }
+    
+    // If sessionBreakMins is 0 or not set, skip break entirely
+    if (settings.sessionBreakMins === 0 || !settings.sessionBreakMins) {
+      console.log('Session break disabled (set to 0) - continuing immediately');
     }
     
     // Don't reset counters - continue from previous!
