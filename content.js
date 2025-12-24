@@ -4,14 +4,26 @@ console.log('=== SNAPCHAT FILTER LOADING ===');
 (function() {
   'use strict';
   
-  if (window.__snapFilterLoaded) {
-    console.log('Already loaded');
+  // Unique identifier to avoid conflicts with CupidBot and other extensions
+  const SF_UNIQUE_ID = 'sf_' + Math.random().toString(36).substr(2, 9);
+  const SF_VERSION = '2.1.0';
+  
+  if (window.__sf_snapFilterLoaded_v2) {
+    console.log('SF: Already loaded');
     return;
   }
-  window.__snapFilterLoaded = true;
+  window.__sf_snapFilterLoaded_v2 = true;
   
-  console.log('✅ Snapchat Friend Filter LOADED');
-  console.log('URL:', window.location.href);
+  // Don't interfere with CupidBot - check if on OnlyFans
+  if (window.location.hostname.includes('onlyfans')) {
+    console.log('SF: OnlyFans detected, staying dormant for CupidBot');
+    return;
+  }
+  
+  console.log('SF v' + SF_VERSION + ' loaded');
+  
+  // Use non-obvious console prefix to avoid detection
+  const log = (msg) => console.log('%c[SF]', 'color: #FFFC00; font-weight: bold', msg);
 
   // State
   let isRunning = false;
@@ -952,15 +964,19 @@ SEXUAL:YES`;
   }
 
   function createPanel() {
-    if (document.getElementById('snap-filter-panel')) {
-      document.getElementById('snap-filter-panel').style.display = 'flex';
+    // Use unique ID to avoid conflicts with CupidBot and other extensions
+    const panelId = 'sf-ctrl-panel-x7k9';
+    
+    if (document.getElementById(panelId)) {
+      document.getElementById(panelId).style.display = 'flex';
       return true;
     }
     
     if (!document.body) return false;
     
     panel = document.createElement('div');
-    panel.id = 'snap-filter-panel';
+    panel.id = panelId;
+    panel.setAttribute('data-sf-panel', 'true'); // Custom attribute for identification
     panel.style.cssText = `
       position: fixed;
       top: 50%;
@@ -981,7 +997,7 @@ SEXUAL:YES`;
     
     // Draggable header
     const header = document.createElement('div');
-    header.id = 'snap-filter-header';
+    header.id = 'sf-ctrl-header-x7k9';
     header.style.cssText = `
       background: linear-gradient(135deg, #FFFC00 0%, #FFE500 100%);
       color: #000;
@@ -1035,6 +1051,9 @@ SEXUAL:YES`;
   }
 
   function hidePanel() {
+    const panelId = 'sf-ctrl-panel-x7k9';
+    const existingPanel = document.getElementById(panelId);
+    if (existingPanel) existingPanel.style.display = 'none';
     if (panel) panel.style.display = 'none';
   }
 

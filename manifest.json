@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Snapchat Friend Filter",
-  "version": "1.0.0",
+  "name": "SF Control",
+  "version": "2.1.0",
   "description": "Automatically filter Snapchat friend requests based on name patterns and emoji",
   "permissions": [
     "storage",
