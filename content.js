@@ -2658,52 +2658,6 @@ SEXUAL:YES`;
   // FRIEND ADDING FUNCTIONS (Quick Add)
   // ============================================
   
-  // Load friend adding rate limits
-  async function loadFriendAddLimits() {
-    try {
-      const data = await chrome.storage.local.get([
-        'friendsAddedToday', 'friendsAddedThisHour', 
-        'lastFriendAddHourTimestamp', 'lastFriendAddDayTimestamp'
-      ]);
-      const now = Date.now();
-      const today = new Date().toDateString();
-      const currentHour = Math.floor(now / (60 * 60 * 1000));
-      
-      if (data.lastFriendAddDayTimestamp !== today) {
-        friendsAddedToday = 0;
-        lastFriendAddDayTimestamp = today;
-      } else {
-        friendsAddedToday = data.friendsAddedToday || 0;
-        lastFriendAddDayTimestamp = data.lastFriendAddDayTimestamp || today;
-      }
-      
-      // Reset hourly counter if hour has changed
-      if (data.lastFriendAddHourTimestamp !== undefined && data.lastFriendAddHourTimestamp !== currentHour) {
-        friendsAddedThisHour = 0;
-        lastFriendAddHourTimestamp = currentHour;
-        // Save reset immediately
-        await chrome.storage.local.set({
-          friendsAddedThisHour: 0,
-          lastFriendAddHourTimestamp: currentHour
-        });
-        log('Hourly friend add counter reset (new hour started)');
-      } else {
-        friendsAddedThisHour = data.friendsAddedThisHour || 0;
-        lastFriendAddHourTimestamp = data.lastFriendAddHourTimestamp || currentHour;
-      }
-      
-      await chrome.storage.local.set({
-        friendsAddedToday: friendsAddedToday,
-        friendsAddedThisHour: friendsAddedThisHour,
-        lastFriendAddHourTimestamp: lastFriendAddHourTimestamp,
-        lastFriendAddDayTimestamp: lastFriendAddDayTimestamp
-      });
-    } catch (e) {
-      console.log('Error loading friend add limits:', e);
-    }
-  }
-  
-  // Check if we can add more friends (hourly and daily limits)
   // Get current PST time
   function getPSTTime() {
     const now = new Date();
@@ -2713,6 +2667,58 @@ SEXUAL:YES`;
     const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
     const pstTime = new Date(utcTime + (pstOffset * 60000));
     return pstTime;
+  }
+  
+  // Load friend adding rate limits (using PST time)
+  async function loadFriendAddLimits() {
+    try {
+      const data = await chrome.storage.local.get([
+        'friendsAddedToday', 'friendsAddedThisHour', 
+        'lastFriendAddHourTimestamp', 'lastFriendAddDayTimestamp'
+      ]);
+      
+      // Use PST time for all checks
+      const pstNow = getPSTTime();
+      const pstToday = pstNow.toDateString();
+      const pstHour = Math.floor(pstNow.getTime() / (60 * 60 * 1000));
+      
+      // Check if new day (PST midnight - 00:00 PST)
+      if (!data.lastFriendAddDayTimestamp || data.lastFriendAddDayTimestamp !== pstToday) {
+        // New day - reset daily counter
+        friendsAddedToday = 0;
+        lastFriendAddDayTimestamp = pstToday;
+        log('Daily friend add counter reset (new day in PST - 00:00)');
+      } else {
+        friendsAddedToday = data.friendsAddedToday || 0;
+        lastFriendAddDayTimestamp = data.lastFriendAddDayTimestamp || pstToday;
+      }
+      
+      // Reset hourly counter if hour has changed (PST)
+      if (data.lastFriendAddHourTimestamp !== undefined && data.lastFriendAddHourTimestamp !== pstHour) {
+        friendsAddedThisHour = 0;
+        lastFriendAddHourTimestamp = pstHour;
+        // Save reset immediately
+        await chrome.storage.local.set({
+          friendsAddedThisHour: 0,
+          lastFriendAddHourTimestamp: pstHour
+        });
+        log('Hourly friend add counter reset (new hour in PST)');
+      } else {
+        friendsAddedThisHour = data.friendsAddedThisHour || 0;
+        lastFriendAddHourTimestamp = data.lastFriendAddHourTimestamp || pstHour;
+      }
+      
+      await chrome.storage.local.set({
+        friendsAddedToday: friendsAddedToday,
+        friendsAddedThisHour: friendsAddedThisHour,
+        lastFriendAddHourTimestamp: lastFriendAddHourTimestamp,
+        lastFriendAddDayTimestamp: lastFriendAddDayTimestamp
+      });
+      
+      log('Friend add limits loaded (PST) - Today: ' + friendsAddedToday + ', This hour: ' + friendsAddedThisHour);
+    } catch (e) {
+      log('Error loading friend add limits: ' + e);
+    }
   }
   
   // Check if current PST time is past stop time
